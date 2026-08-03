@@ -13,26 +13,63 @@
    ALIEN MARKUP — retrofuture CRT console
    ============================================================ */
 :root{
-  --bg:#070b09;
-  --bg-2:#0b120e;
-  --panel:#0a100d;
-  --ph:#4dffa6;             /* phosphor */
-  --ph-dim:#1f7a53;
-  --ph-ghost:#0f2a20;
-  --warn:#ffb648;
-  --err:#ff5f56;
-  --grid:rgba(77,255,166,.07);
   --font:"Berkeley Mono","JetBrains Mono","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --pad:14px;
+  --err:#ff5f56;
+  --warn:#ffb648;
+  --glow:6px; --scan:.22; --vig:.55; --gridsize:34px;
 }
-html[data-theme="amber"]{
-  --ph:#ffb648; --ph-dim:#8a5c15; --ph-ghost:#2a1e08; --grid:rgba(255,182,72,.07);
+
+/* ALIEN — фосфорный ЭЛТ */
+html[data-theme="alien"]{
+  --bg:#070b09; --bg-2:#0b120e; --panel:#0a100d;
+  --ph:#4dffa6; --ph-dim:#1f7a53; --ph-ghost:#0f2a20;
+  --a2:#ffb648; --led:#4dffa6; --grid:rgba(77,255,166,.07);
+}
+/* VAULT — янтарный терминал убежища */
+html[data-theme="vault"]{
   --bg:#0a0704; --bg-2:#120d07; --panel:#100b06;
+  --ph:#ffb648; --ph-dim:#8a5c15; --ph-ghost:#2a1e08;
+  --a2:#7dff9b; --led:#ffb648; --grid:rgba(255,182,72,.07);
+  --glow:7px; --scan:.25; --vig:.6;
 }
-html[data-theme="ice"]{
-  --ph:#7ad7ff; --ph-dim:#2a6e8c; --ph-ghost:#0c2530; --grid:rgba(122,215,255,.07);
+/* SOLARIS — холодная станция */
+html[data-theme="solaris"]{
   --bg:#050a0d; --bg-2:#081116; --panel:#070f14;
+  --ph:#7ad7ff; --ph-dim:#2a6e8c; --ph-ghost:#0c2530;
+  --a2:#d8f2ff; --led:#7ad7ff; --grid:rgba(122,215,255,.07);
+  --glow:5px; --scan:.18; --vig:.5;
 }
+/* REPLICANT — неоновый нуар */
+html[data-theme="replicant"]{
+  --bg:#0a0714; --bg-2:#0f0a1c; --panel:#0c0818;
+  --ph:#22d3ee; --ph-dim:#4a3a7a; --ph-ghost:#1a1230;
+  --a2:#ff2e88; --led:#ff2e88; --grid:rgba(255,46,136,.06);
+  --glow:11px; --scan:.12; --vig:.62; --gridsize:44px;
+}
+/* GRID — световая сетка */
+html[data-theme="grid"]{
+  --bg:#000306; --bg-2:#03080c; --panel:#02060a;
+  --ph:#00e5ff; --ph-dim:#0d5f75; --ph-ghost:#04212b;
+  --a2:#ff8a00; --led:#ff8a00; --grid:rgba(0,229,255,.09);
+  --glow:9px; --scan:.08; --vig:.5; --gridsize:28px;
+}
+/* ZION — цифровой дождь */
+html[data-theme="zion"]{
+  --bg:#000600; --bg-2:#020a02; --panel:#010801;
+  --ph:#00ff41; --ph-dim:#0a6b1e; --ph-ghost:#04220a;
+  --a2:#d4ffd4; --led:#00ff41; --grid:rgba(0,255,65,.05);
+  --glow:8px; --scan:.3; --vig:.6;
+}
+/* MONOLITH — светлая, дневная */
+html[data-theme="monolith"]{
+  --bg:#eceae4; --bg-2:#f6f5f2; --panel:#f6f5f2;
+  --ph:#16150f; --ph-dim:#a8a498; --ph-ghost:#dedbd2;
+  --a2:#e8341c; --led:#e8341c; --grid:rgba(22,21,15,.05);
+  --glow:0px; --scan:.045; --vig:.08;
+}
+html[data-theme="monolith"] #app{animation:none}
+html[data-theme="monolith"] #crt::before{mix-blend-mode:normal}
 
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -40,7 +77,8 @@ body{
   margin:0; background:var(--bg); color:var(--ph);
   font-family:var(--font); font-size:13px; line-height:1.5;
   overflow:hidden;
-  text-shadow:0 0 6px color-mix(in srgb, var(--ph) 35%, transparent);
+  text-shadow:0 0 var(--glow) color-mix(in srgb, var(--ph) 35%, transparent);
+  transition:background .25s linear, color .25s linear;
 }
 
 /* --- CRT overlays --- */
@@ -48,23 +86,28 @@ body{
 #crt::before{ /* scanlines */
   content:""; position:absolute; inset:0;
   background:repeating-linear-gradient(to bottom,
-    rgba(0,0,0,0) 0 2px, rgba(0,0,0,.22) 2px 3px);
+    rgba(0,0,0,0) 0 2px, rgba(0,0,0,var(--scan)) 2px 3px);
   mix-blend-mode:multiply;
 }
 #crt::after{ /* vignette + glass */
   content:""; position:absolute; inset:0;
   background:
-    radial-gradient(120% 100% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%),
+    radial-gradient(120% 100% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,var(--vig)) 100%),
     linear-gradient(120deg, rgba(255,255,255,.03) 0%, rgba(255,255,255,0) 40%);
 }
+#rain{
+  position:fixed; inset:0; z-index:98; pointer-events:none;
+  opacity:0; transition:opacity .5s linear; mix-blend-mode:screen;
+}
+html[data-theme="zion"] #rain{opacity:.16}
 @keyframes flick{0%,97%,100%{opacity:1}98%{opacity:.965}99%{opacity:.985}}
 #app{animation:flick 7s infinite steps(1,end)}
 
 /* --- layout --- */
-#app{height:100%; display:flex; flex-direction:column;
+#app{height:100%; display:flex; flex-direction:column; position:relative; z-index:1;
   background-image:linear-gradient(var(--grid) 1px, transparent 1px),
                    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size:34px 34px;
+  background-size:var(--gridsize) var(--gridsize);
 }
 
 header{
@@ -82,11 +125,29 @@ header{
 .led{display:flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.18em;
   color:var(--ph-dim); text-transform:uppercase}
 .led b{
-  width:7px; height:7px; background:var(--ph); display:block;
-  box-shadow:0 0 8px var(--ph); animation:pulse 2.4s infinite;
+  width:7px; height:7px; background:var(--led); display:block;
+  box-shadow:0 0 8px var(--led); animation:pulse 2.4s infinite;
 }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .led.off b{background:var(--ph-ghost); box-shadow:none; animation:none}
+
+/* --- палитра тем --- */
+.palette{position:relative}
+.palette>button{display:flex; align-items:center; gap:8px}
+.chip{width:9px; height:9px; display:block; border:1px solid rgba(0,0,0,.35)}
+.menu{
+  position:absolute; top:calc(100% + 7px); right:0; z-index:120; min-width:212px;
+  background:var(--bg-2); border:1px solid var(--ph); padding:4px;
+  box-shadow:0 0 26px -8px var(--ph); display:none;
+}
+.menu.open{display:block}
+.menu button{
+  display:flex; align-items:center; gap:9px; width:100%; border:0; text-align:left;
+  padding:8px 9px; letter-spacing:.14em;
+}
+.menu button:hover{background:var(--ph-ghost); box-shadow:none}
+.menu button[aria-current="true"]{background:var(--ph); color:var(--bg); text-shadow:none}
+.menu .sub{margin-left:auto; font-size:9.5px; letter-spacing:.1em; opacity:.65; text-transform:none}
 
 /* --- toolbar --- */
 .toolbar{
@@ -202,6 +263,7 @@ footer b{color:var(--ph); font-weight:400}
 </style>
 </head>
 <body>
+<canvas id="rain"></canvas>
 <div id="crt"></div>
 <div id="drop">▚ отпустите файл — загрузим в буфер ▚</div>
 <div id="toast"></div>
@@ -210,14 +272,19 @@ footer b{color:var(--ph); font-weight:400}
 
   <header>
     <div class="brand">
-      <h1>Alien Markup</h1>
+      <h1 id="brandName">Alien Markup</h1>
       <span class="ver">unit 2.1 / semiotic markup processor</span>
     </div>
     <div class="leds">
       <span class="led"><b></b>core</span>
       <span class="led" id="ledParse"><b></b>parser</span>
       <span class="led off" id="ledErr"><b></b>errors</span>
-      <button id="themeBtn" title="Смена люминофора">◧ фосфор</button>
+      <div class="palette">
+        <button id="themeBtn" aria-haspopup="true" aria-expanded="false" title="Оформление (Ctrl+Shift+T)">
+          <span class="chip" id="themeChip"></span><span id="themeLabel">alien</span> ▾
+        </button>
+        <div class="menu" id="themeMenu" role="menu"></div>
+      </div>
     </div>
   </header>
 
@@ -1408,18 +1475,127 @@ footer b{color:var(--ph); font-weight:400}
   var input = $('input'), output = $('output');
   var level = 2;
 
-  /* ---------------- theme ---------------- */
-  var THEMES = ['green', 'amber', 'ice'];
-  var themeIdx = Number(localStorage.getItem('am.theme') || 0);
-  function applyTheme() {
-    document.documentElement.dataset.theme = THEMES[themeIdx];
-    localStorage.setItem('am.theme', themeIdx);
+  /* ---------------- темы ---------------- */
+  var THEMES = [
+    { id: 'alien',     word: 'Alien',     sub: 'фосфорный ЭЛТ',   ink: '#4dffa6', bg: '#070b09' },
+    { id: 'vault',     word: 'Vault',     sub: 'янтарь убежища',  ink: '#ffb648', bg: '#0a0704' },
+    { id: 'solaris',   word: 'Solaris',   sub: 'холодная станция',ink: '#7ad7ff', bg: '#050a0d' },
+    { id: 'replicant', word: 'Replicant', sub: 'неоновый нуар',   ink: '#22d3ee', bg: '#0a0714' },
+    { id: 'grid',      word: 'Grid',      sub: 'световая сетка',  ink: '#00e5ff', bg: '#000306' },
+    { id: 'zion',      word: 'Zion',      sub: 'цифровой дождь',  ink: '#00ff41', bg: '#000600' },
+    { id: 'monolith',  word: 'Monolith',  sub: 'дневная',         ink: '#16150f', bg: '#eceae4' }
+  ];
+
+  var themeId = localStorage.getItem('am.theme') || 'alien';
+  if (!THEMES.some(function (t) { return t.id === themeId; })) themeId = 'alien';
+
+  function current() {
+    return THEMES.filter(function (t) { return t.id === themeId; })[0] || THEMES[0];
   }
-  applyTheme();
-  $('themeBtn').onclick = function () {
-    themeIdx = (themeIdx + 1) % THEMES.length; applyTheme();
-    toast('люминофор: ' + THEMES[themeIdx]);
+
+  function favicon(t) {
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
+      "<rect width='32' height='32' rx='6' fill='" + t.bg + "'/>" +
+      "<g fill='" + t.ink + "'>" +
+      "<rect x='5' y='7' width='22' height='3.2' rx='1.6'/>" +
+      "<rect x='10' y='14.4' width='17' height='3.2' rx='1.6'/>" +
+      "<rect x='15' y='21.8' width='12' height='3.2' rx='1.6'/></g>" +
+      "<rect x='5' y='21.8' width='3.2' height='3.2' rx='1' fill='" + t.ink + "' opacity='.45'/></svg>";
+    return 'data:image/svg+xml,' + svg.replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E');
+  }
+
+  function applyTheme(silent) {
+    var t = current();
+    document.documentElement.dataset.theme = t.id;
+    localStorage.setItem('am.theme', t.id);
+    $('brandName').textContent = t.word + ' Markup';
+    $('themeLabel').textContent = t.id;
+    $('themeChip').style.background = t.ink;
+    document.title = t.word.toUpperCase() + ' MARKUP — форматтер и минификатор HTML';
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', t.bg);
+    document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]').forEach(function (l) {
+      l.setAttribute('href', favicon(t));
+    });
+    Array.prototype.forEach.call($('themeMenu').children, function (b) {
+      b.setAttribute('aria-current', b.dataset.id === t.id ? 'true' : 'false');
+    });
+    rain.sync();
+    if (!silent) toast('оформление: ' + t.word);
+  }
+
+  $('themeMenu').innerHTML = THEMES.map(function (t) {
+    return '<button role="menuitem" data-id="' + t.id + '">' +
+      '<span class="chip" style="background:' + t.ink + '"></span>' + t.word +
+      '<span class="sub">' + t.sub + '</span></button>';
+  }).join('');
+
+  $('themeMenu').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-id]');
+    if (!b) return;
+    themeId = b.dataset.id;
+    applyTheme();
+    closeMenu();
+  });
+
+  function openMenu() {
+    $('themeMenu').classList.add('open');
+    $('themeBtn').setAttribute('aria-expanded', 'true');
+  }
+  function closeMenu() {
+    $('themeMenu').classList.remove('open');
+    $('themeBtn').setAttribute('aria-expanded', 'false');
+  }
+  $('themeBtn').onclick = function (e) {
+    e.stopPropagation();
+    if ($('themeMenu').classList.contains('open')) closeMenu(); else openMenu();
   };
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.palette')) closeMenu();
+  });
+
+  /* ---------------- цифровой дождь (тема zion) ---------------- */
+  var rain = (function () {
+    var cv = $('rain');
+    var ctx = cv && cv.getContext ? cv.getContext('2d') : null;
+    if (!ctx) return { sync: function () {} };
+    var cols = [], size = 15, timer = null;
+    var GLYPHS = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789<>/{}$@';
+
+    function resize() {
+      cv.width = window.innerWidth;
+      cv.height = window.innerHeight;
+      var n = Math.ceil(cv.width / size);
+      cols = [];
+      for (var i = 0; i < n; i++) cols.push(Math.random() * -60);
+    }
+    function frame() {
+      ctx.fillStyle = 'rgba(0,0,0,.09)';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.font = size + 'px ' + getComputedStyle(document.body).fontFamily;
+      ctx.fillStyle = '#00ff41';
+      for (var i = 0; i < cols.length; i++) {
+        var ch = GLYPHS[(Math.random() * GLYPHS.length) | 0];
+        ctx.fillText(ch, i * size, cols[i] * size);
+        if (cols[i] * size > cv.height && Math.random() > 0.975) cols[i] = 0;
+        cols[i]++;
+      }
+    }
+    window.addEventListener('resize', function () { if (timer) resize(); });
+    return {
+      sync: function () {
+        var on = document.documentElement.dataset.theme === 'zion' &&
+                 !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (on && !timer) { resize(); timer = setInterval(frame, 55); }
+        else if (!on && timer) {
+          clearInterval(timer); timer = null;
+          ctx.clearRect(0, 0, cv.width, cv.height);
+        }
+      }
+    };
+  })();
+
+  applyTheme(true);
 
   /* ---------------- counters ---------------- */
   var todayKey = new Date().toISOString().slice(0, 10);
@@ -1643,6 +1819,13 @@ footer b{color:var(--ph); font-weight:400}
     if (mod && e.key === 'Enter') { e.preventDefault(); run('format'); }
     if (mod && e.shiftKey && (e.key === 'M' || e.key === 'm')) { e.preventDefault(); run('minify'); }
     if (mod && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); $('btnCopy').click(); }
+    if (mod && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+      e.preventDefault();
+      var i = THEMES.map(function (t) { return t.id; }).indexOf(themeId);
+      themeId = THEMES[(i + 1) % THEMES.length].id;
+      applyTheme();
+    }
+    if (e.key === 'Escape') closeMenu();
   });
 
   /* ---------------- sample ---------------- */
@@ -1675,7 +1858,7 @@ footer b{color:var(--ph); font-weight:400}
 
   /* ---------------- boot sequence ---------------- */
   var BOOT = [
-    'ALIEN MARKUP // UNIT 2.1',
+    current().word.toUpperCase() + ' MARKUP // UNIT 2.1',
     '----------------------------------------',
     'CORE MEMORY ............ 640K OK',
     'TOKENIZER .............. LOADED',
@@ -1686,6 +1869,7 @@ footer b{color:var(--ph); font-weight:400}
     'CTRL+ENTER .... форматировать',
     'CTRL+SHIFT+M .. сжать',
     'CTRL+SHIFT+C .. копировать результат',
+    'CTRL+SHIFT+T .. следующее оформление',
     '',
     'ОЖИДАНИЕ ВВОДА ▮'
   ];
