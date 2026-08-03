@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MARKUP TERMINAL — форматтер и минификатор HTML</title>
+<meta name="description" content="Форматирование и сжатие HTML-верстки с поддержкой шаблонизаторов: Blade, Twig, Jinja, ERB, Mustache, PHP.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23070b09'/><text y='24' x='4' font-family='monospace' font-size='20' fill='%234dffa6'>&lt;/&gt;</text></svg>">
+<style>
+/* ============================================================
+   MARKUP TERMINAL — retrofuture CRT console
+   ============================================================ */
+:root{
+  --bg:#070b09;
+  --bg-2:#0b120e;
+  --panel:#0a100d;
+  --ph:#4dffa6;             /* phosphor */
+  --ph-dim:#1f7a53;
+  --ph-ghost:#0f2a20;
+  --warn:#ffb648;
+  --err:#ff5f56;
+  --grid:rgba(77,255,166,.07);
+  --font:"Berkeley Mono","JetBrains Mono","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --pad:14px;
+}
+html[data-theme="amber"]{
+  --ph:#ffb648; --ph-dim:#8a5c15; --ph-ghost:#2a1e08; --grid:rgba(255,182,72,.07);
+  --bg:#0a0704; --bg-2:#120d07; --panel:#100b06;
+}
+html[data-theme="ice"]{
+  --ph:#7ad7ff; --ph-dim:#2a6e8c; --ph-ghost:#0c2530; --grid:rgba(122,215,255,.07);
+  --bg:#050a0d; --bg-2:#081116; --panel:#070f14;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ph);
+  font-family:var(--font); font-size:13px; line-height:1.5;
+  overflow:hidden;
+  text-shadow:0 0 6px color-mix(in srgb, var(--ph) 35%, transparent);
+}
+
+/* --- CRT overlays --- */
+#crt{position:fixed; inset:0; pointer-events:none; z-index:99}
+#crt::before{ /* scanlines */
+  content:""; position:absolute; inset:0;
+  background:repeating-linear-gradient(to bottom,
+    rgba(0,0,0,0) 0 2px, rgba(0,0,0,.22) 2px 3px);
+  mix-blend-mode:multiply;
+}
+#crt::after{ /* vignette + glass */
+  content:""; position:absolute; inset:0;
+  background:
+    radial-gradient(120% 100% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%),
+    linear-gradient(120deg, rgba(255,255,255,.03) 0%, rgba(255,255,255,0) 40%);
+}
+@keyframes flick{0%,97%,100%{opacity:1}98%{opacity:.965}99%{opacity:.985}}
+#app{animation:flick 7s infinite steps(1,end)}
+
+/* --- layout --- */
+#app{height:100%; display:flex; flex-direction:column;
+  background-image:linear-gradient(var(--grid) 1px, transparent 1px),
+                   linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:34px 34px;
+}
+
+header{
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  padding:10px 16px; border-bottom:1px solid var(--ph-dim);
+  background:linear-gradient(180deg, var(--bg-2), transparent);
+}
+.brand{display:flex; align-items:baseline; gap:12px}
+.brand h1{
+  margin:0; font-size:17px; font-weight:400; letter-spacing:.34em;
+  text-transform:uppercase;
+}
+.brand .ver{font-size:10px; letter-spacing:.22em; color:var(--ph-dim)}
+.leds{display:flex; gap:14px; margin-left:auto; align-items:center; flex-wrap:wrap}
+.led{display:flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.18em;
+  color:var(--ph-dim); text-transform:uppercase}
+.led b{
+  width:7px; height:7px; background:var(--ph); display:block;
+  box-shadow:0 0 8px var(--ph); animation:pulse 2.4s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.led.off b{background:var(--ph-ghost); box-shadow:none; animation:none}
+
+/* --- toolbar --- */
+.toolbar{
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  padding:9px 16px; border-bottom:1px solid var(--ph-dim);
+  background:rgba(0,0,0,.25);
+}
+button, .seg span, select{
+  font-family:inherit; font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  background:transparent; color:var(--ph); border:1px solid var(--ph-dim);
+  padding:7px 13px; cursor:pointer; position:relative;
+  transition:background .12s linear, color .12s linear, box-shadow .12s linear;
+}
+button:hover, .seg span:hover{background:var(--ph-ghost); box-shadow:0 0 12px -2px var(--ph)}
+button:active{transform:translateY(1px)}
+button.primary{border-color:var(--ph); box-shadow:inset 0 0 0 1px rgba(0,0,0,.4), 0 0 14px -6px var(--ph)}
+button.primary:hover{background:var(--ph); color:var(--bg); text-shadow:none}
+button:disabled{opacity:.35; cursor:not-allowed}
+.seg{display:flex; border:1px solid var(--ph-dim)}
+.seg span{border:0; border-right:1px solid var(--ph-dim); user-select:none}
+.seg span:last-child{border-right:0}
+.seg span[aria-selected="true"]{background:var(--ph); color:var(--bg); text-shadow:none}
+.sep{width:1px; height:22px; background:var(--ph-dim); opacity:.6}
+.label{font-size:10px; letter-spacing:.2em; color:var(--ph-dim); text-transform:uppercase}
+select{padding:6px 8px}
+select option{background:var(--bg-2); color:var(--ph)}
+.spacer{margin-left:auto}
+
+/* --- panels --- */
+main{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:0}
+.pane{display:flex; flex-direction:column; min-width:0; min-height:0; position:relative;
+  border-right:1px solid var(--ph-dim); background:var(--panel)}
+.pane:last-child{border-right:0}
+.pane-head{
+  display:flex; align-items:center; gap:10px; padding:7px 12px;
+  border-bottom:1px solid var(--ph-dim); font-size:10px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--ph-dim); background:rgba(0,0,0,.35);
+}
+.pane-head .dot{width:5px;height:5px;background:var(--ph);box-shadow:0 0 6px var(--ph)}
+.pane-head .meta{margin-left:auto; font-size:10px; letter-spacing:.14em}
+.editor{flex:1; display:flex; min-height:0; position:relative}
+.gutter{
+  padding:10px 8px 10px 12px; text-align:right; color:var(--ph-dim);
+  font-size:12.5px; line-height:1.55; user-select:none; overflow:hidden;
+  border-right:1px solid var(--ph-ghost); background:rgba(0,0,0,.25);
+  min-width:46px; white-space:pre; text-shadow:none;
+}
+textarea{
+  flex:1; width:100%; resize:none; border:0; outline:0; padding:10px 14px;
+  background:transparent; color:var(--ph); font-family:inherit;
+  font-size:12.5px; line-height:1.55; white-space:pre; overflow:auto;
+  caret-color:var(--ph); tab-size:2;
+}
+textarea::placeholder{color:var(--ph-dim); opacity:.7}
+textarea::selection{background:var(--ph); color:var(--bg); text-shadow:none}
+textarea::-webkit-scrollbar{width:10px;height:10px}
+textarea::-webkit-scrollbar-track{background:rgba(0,0,0,.3)}
+textarea::-webkit-scrollbar-thumb{background:var(--ph-ghost); border:1px solid var(--ph-dim)}
+textarea::-webkit-scrollbar-thumb:hover{background:var(--ph-dim)}
+
+.corner{position:absolute; width:9px; height:9px; border:1px solid var(--ph-dim); pointer-events:none}
+.c-tl{top:4px;left:4px;border-right:0;border-bottom:0}
+.c-tr{top:4px;right:4px;border-left:0;border-bottom:0}
+.c-bl{bottom:4px;left:4px;border-right:0;border-top:0}
+.c-br{bottom:4px;right:4px;border-left:0;border-top:0}
+
+/* --- diagnostics --- */
+#diag{
+  max-height:150px; overflow:auto; border-top:1px solid var(--ph-dim);
+  padding:8px 12px; font-size:11px; background:rgba(0,0,0,.4); display:none;
+}
+#diag.show{display:block}
+#diag .row{display:flex; gap:8px; padding:2px 0}
+#diag .row .tag{min-width:52px; font-size:9.5px; letter-spacing:.16em; opacity:.9}
+.lvl-err{color:var(--err)} .lvl-warn{color:var(--warn)} .lvl-info{color:var(--ph-dim)}
+
+/* --- status bar --- */
+footer{
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  padding:7px 16px; border-top:1px solid var(--ph-dim);
+  font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ph-dim);
+  background:linear-gradient(0deg, var(--bg-2), transparent);
+}
+footer b{color:var(--ph); font-weight:400}
+.cursor{display:inline-block; width:7px; height:12px; background:var(--ph);
+  vertical-align:-2px; animation:blink 1.05s steps(1,end) infinite}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* --- drop zone --- */
+#drop{
+  position:fixed; inset:0; z-index:80; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.82); border:2px dashed var(--ph);
+  font-size:15px; letter-spacing:.3em; text-transform:uppercase;
+}
+#drop.show{display:flex}
+
+/* --- toast --- */
+#toast{
+  position:fixed; bottom:44px; left:50%; transform:translateX(-50%) translateY(14px);
+  z-index:120; padding:9px 18px; border:1px solid var(--ph); background:var(--bg-2);
+  font-size:11px; letter-spacing:.2em; text-transform:uppercase; opacity:0;
+  transition:opacity .18s, transform .18s; pointer-events:none;
+  box-shadow:0 0 22px -6px var(--ph);
+}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+@media (max-width:900px){
+  main{grid-template-columns:1fr; grid-template-rows:1fr 1fr}
+  .pane{border-right:0; border-bottom:1px solid var(--ph-dim)}
+  .brand h1{font-size:14px; letter-spacing:.2em}
+  body{overflow:auto}
+}
+</style>
+</head>
+<body>
+<div id="crt"></div>
+<div id="drop">▚ отпустите файл — загрузим в буфер ▚</div>
+<div id="toast"></div>
+
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <h1>Markup Terminal</h1>
+      <span class="ver">unit 2.1 / semiotic markup processor</span>
+    </div>
+    <div class="leds">
+      <span class="led"><b></b>core</span>
+      <span class="led" id="ledParse"><b></b>parser</span>
+      <span class="led off" id="ledErr"><b></b>errors</span>
+      <button id="themeBtn" title="Смена люминофора">◧ фосфор</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button class="primary" id="btnFormat">▶ форматировать</button>
+    <button id="btnMinify">▼ сжать</button>
+    <div class="seg" id="levelSeg" role="tablist" title="Степень сжатия">
+      <span role="tab" data-lv="1">L1 safe</span>
+      <span role="tab" data-lv="2" aria-selected="true">L2 balanced</span>
+      <span role="tab" data-lv="3">L3 extreme</span>
+    </div>
+    <div class="sep"></div>
+    <span class="label">отступ</span>
+    <select id="indentSel">
+      <option value="2">2 пробела</option>
+      <option value="4">4 пробела</option>
+      <option value="tab">таб</option>
+    </select>
+    <div class="sep"></div>
+    <button id="btnSample">образец</button>
+    <button id="btnSwap">↺ в ввод</button>
+    <button id="btnClear">очистить</button>
+    <div class="spacer"></div>
+    <button id="btnCopy">копировать</button>
+    <button id="btnDownload">скачать</button>
+  </div>
+
+  <main>
+    <section class="pane">
+      <div class="pane-head">
+        <span class="dot"></span><span>input // исходная верстка</span>
+        <span class="meta" id="inMeta">0 симв · 0 стр</span>
+      </div>
+      <div class="editor">
+        <div class="gutter" id="gutIn">1</div>
+        <textarea id="input" spellcheck="false" autocomplete="off"
+          placeholder="Вставьте HTML сюда, либо перетащите файл в окно…"></textarea>
+      </div>
+      <span class="corner c-bl"></span><span class="corner c-br"></span>
+    </section>
+
+    <section class="pane">
+      <div class="pane-head">
+        <span class="dot"></span><span>output // результат</span>
+        <span class="meta" id="outMeta">—</span>
+      </div>
+      <div class="editor">
+        <div class="gutter" id="gutOut">1</div>
+        <textarea id="output" spellcheck="false" autocomplete="off" readonly></textarea>
+      </div>
+      <div id="diag"></div>
+      <span class="corner c-bl"></span><span class="corner c-br"></span>
+    </section>
+  </main>
+
+  <footer>
+    <span>статус: <b id="stStatus">ожидание</b><span class="cursor"></span></span>
+    <span>режим: <b id="stMode">—</b></span>
+    <span>экономия: <b id="stSave">—</b></span>
+    <span>диагностика: <b id="stDiag">0</b></span>
+    <span class="spacer"></span>
+    <span>за сегодня: <b id="stToday">0</b></span>
+    <span>всего: <b id="stTotal">0</b></span>
+    <span>сессия: <b id="stSession">0</b></span>
+  </footer>
+</div>
+
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $('input'), output = $('output');
+  var level = 2;
+
+  /* ---------------- theme ---------------- */
+  var THEMES = ['green', 'amber', 'ice'];
+  var themeIdx = Number(localStorage.getItem('mt.theme') || 0);
+  function applyTheme() {
+    document.documentElement.dataset.theme = THEMES[themeIdx];
+    localStorage.setItem('mt.theme', themeIdx);
+  }
+  applyTheme();
+  $('themeBtn').onclick = function () {
+    themeIdx = (themeIdx + 1) % THEMES.length; applyTheme();
+    toast('люминофор: ' + THEMES[themeIdx]);
+  };
+
+  /* ---------------- counters ---------------- */
+  var todayKey = new Date().toISOString().slice(0, 10);
+  var stats = JSON.parse(localStorage.getItem('mt.stats') || '{}');
+  if (stats.date !== todayKey) { stats.date = todayKey; stats.today = 0; }
+  stats.total = stats.total || 0;
+  var session = 0;
+
+  function paintStats() {
+    $('stToday').textContent = stats.today || 0;
+    $('stTotal').textContent = stats.total || 0;
+    $('stSession').textContent = session;
+  }
+  function bump() {
+    stats.today = (stats.today || 0) + 1;
+    stats.total = (stats.total || 0) + 1;
+    session++;
+    localStorage.setItem('mt.stats', JSON.stringify(stats));
+    paintStats();
+    if (window.MT_GLOBAL_COUNTER) window.MT_GLOBAL_COUNTER();
+  }
+  paintStats();
+
+  /* ---------------- gutters ---------------- */
+  function paintGutter(ta, gut) {
+    var n = ta.value ? ta.value.split('\n').length : 1;
+    if (n > 20000) n = 20000;
+    var cached = gut.dataset.n | 0;
+    if (cached !== n) {
+      var s = '';
+      for (var i = 1; i <= n; i++) s += i + '\n';
+      gut.textContent = s;
+      gut.dataset.n = n;
+    }
+    gut.scrollTop = ta.scrollTop;
+  }
+  function sync(ta, gut) {
+    ta.addEventListener('scroll', function () { gut.scrollTop = ta.scrollTop; });
+    ta.addEventListener('input', function () { paintGutter(ta, gut); });
+  }
+  sync(input, $('gutIn'));
+  sync(output, $('gutOut'));
+
+  function meta(text) {
+    var chars = text.length;
+    var lines = text ? text.split('\n').length : 0;
+    return chars.toLocaleString('ru-RU') + ' симв · ' + lines.toLocaleString('ru-RU') + ' стр';
+  }
+  input.addEventListener('input', function () {
+    $('inMeta').textContent = meta(input.value);
+  });
+
+  /* ---------------- toast ---------------- */
+  var toastEl = $('toast'), toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg; toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 1700);
+  }
+
+  /* ---------------- diagnostics ---------------- */
+  function paintDiag(warnings) {
+    var box = $('diag');
+    $('stDiag').textContent = warnings.length;
+    $('ledErr').classList.toggle('off', !warnings.length);
+    if (!warnings.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
+    var html = warnings.slice(0, 60).map(function (w) {
+      var tag = w.level === 'err' ? 'ошибка' : (w.level === 'warn' ? 'внимание' : 'заметка');
+      return '<div class="row lvl-' + w.level + '"><span class="tag">[' + tag + ']</span><span>' +
+             esc(w.msg) + '</span></div>';
+    }).join('');
+    if (warnings.length > 60) html += '<div class="row lvl-info"><span class="tag"></span><span>… ещё ' + (warnings.length - 60) + '</span></div>';
+    box.innerHTML = html; box.classList.add('show');
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+    });
+  }
+
+  /* ---------------- actions ---------------- */
+  function indentString() {
+    var v = $('indentSel').value;
+    return v === 'tab' ? '\t' : ' '.repeat(Number(v));
+  }
+
+  function run(mode) {
+    var src = input.value;
+    if (!src.trim()) { toast('буфер ввода пуст'); return; }
+    var t0 = performance.now();
+    var res, warnings;
+    try {
+      if (mode === 'format') {
+        var r = MTEngine.beautify(src, { indent: indentString() });
+        res = r.code; warnings = r.warnings.concat(MTEngine.analyze(src).filter(isExtra));
+      } else {
+        res = MTEngine.minify(src, level);
+        warnings = MTEngine.analyze(src);
+      }
+    } catch (e) {
+      $('stStatus').textContent = 'сбой парсера';
+      toast('ошибка: ' + e.message);
+      return;
+    }
+    var dt = (performance.now() - t0).toFixed(1);
+
+    output.value = res;
+    paintGutter(output, $('gutOut'));
+    $('outMeta').textContent = meta(res);
+    $('stMode').textContent = mode === 'format'
+      ? 'формат / ' + ($('indentSel').value === 'tab' ? 'tab' : $('indentSel').value + 'sp')
+      : 'сжатие L' + level;
+
+    var delta = src.length ? Math.round((1 - res.length / src.length) * 100) : 0;
+    $('stSave').textContent = (delta > 0 ? '−' + delta : (delta < 0 ? '+' + (-delta) : '0')) +
+      '% · ' + fmtBytes(src.length - res.length);
+    $('stStatus').textContent = 'готово за ' + dt + ' мс';
+    paintDiag(dedupeWarn(warnings));
+    bump();
+  }
+
+  function isExtra(w) { return w.level === 'info' || /Дубль|Повтор/.test(w.msg); }
+
+  function dedupeWarn(list) {
+    var seen = {}, out = [];
+    list.forEach(function (w) {
+      var k = w.level + '|' + w.msg;
+      if (seen[k]) return; seen[k] = 1; out.push(w);
+    });
+    return out;
+  }
+
+  function fmtBytes(n) {
+    var sign = n < 0 ? '+' : '';
+    n = Math.abs(n);
+    if (n < 1024) return sign + n + ' б';
+    if (n < 1024 * 1024) return sign + (n / 1024).toFixed(1) + ' кб';
+    return sign + (n / 1048576).toFixed(2) + ' мб';
+  }
+
+  $('btnFormat').onclick = function () { run('format'); };
+  $('btnMinify').onclick = function () { run('minify'); };
+
+  $('levelSeg').addEventListener('click', function (e) {
+    var t = e.target.closest('[data-lv]');
+    if (!t) return;
+    level = Number(t.dataset.lv);
+    Array.prototype.forEach.call(this.children, function (c) {
+      c.setAttribute('aria-selected', c === t ? 'true' : 'false');
+    });
+    if (output.value) run('minify');
+  });
+
+  $('btnSwap').onclick = function () {
+    if (!output.value) { toast('нечего переносить'); return; }
+    input.value = output.value;
+    $('inMeta').textContent = meta(input.value);
+    paintGutter(input, $('gutIn'));
+    toast('результат перенесён в ввод');
+  };
+
+  $('btnClear').onclick = function () {
+    input.value = ''; output.value = '';
+    $('inMeta').textContent = meta(''); $('outMeta').textContent = '—';
+    paintGutter(input, $('gutIn')); paintGutter(output, $('gutOut'));
+    paintDiag([]); $('stStatus').textContent = 'буфер очищен';
+    $('stSave').textContent = '—'; $('stMode').textContent = '—';
+    input.focus();
+  };
+
+  $('btnCopy').onclick = function () {
+    if (!output.value) { toast('буфер вывода пуст'); return; }
+    navigator.clipboard.writeText(output.value).then(function () {
+      toast('скопировано в буфер обмена');
+    }, function () {
+      output.select(); document.execCommand('copy'); toast('скопировано');
+    });
+  };
+
+  $('btnDownload').onclick = function () {
+    if (!output.value) { toast('буфер вывода пуст'); return; }
+    var blob = new Blob([output.value], { type: 'text/html;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'markup-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.html';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    toast('файл сохранён');
+  };
+
+  /* ---------------- drag & drop ---------------- */
+  var dz = $('drop'), dragDepth = 0;
+  window.addEventListener('dragenter', function (e) {
+    if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') === -1) return;
+    dragDepth++; dz.classList.add('show');
+  });
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('dragleave', function () {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) dz.classList.remove('show');
+  });
+  window.addEventListener('drop', function (e) {
+    e.preventDefault(); dragDepth = 0; dz.classList.remove('show');
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { toast('файл больше 8 мб'); return; }
+    var fr = new FileReader();
+    fr.onload = function () {
+      input.value = String(fr.result);
+      $('inMeta').textContent = meta(input.value);
+      paintGutter(input, $('gutIn'));
+      $('stStatus').textContent = 'загружен ' + f.name;
+      toast('загружен ' + f.name);
+    };
+    fr.readAsText(f);
+  });
+
+  /* ---------------- hotkeys ---------------- */
+  document.addEventListener('keydown', function (e) {
+    var mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key === 'Enter') { e.preventDefault(); run('format'); }
+    if (mod && e.shiftKey && (e.key === 'M' || e.key === 'm')) { e.preventDefault(); run('minify'); }
+    if (mod && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); $('btnCopy').click(); }
+  });
+
+  /* ---------------- sample ---------------- */
+  var SAMPLE = [
+    '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Каталог</title>',
+    '<!-- шапка страницы,',
+    '     не трогать без причины --></head>',
+    '<body class="page   dark"><div class="wrap"><header class="hdr"><a href="/" class="logo">ACME</a>',
+    '@if($user)<span class="hi">Привет, {{ $user->name }}!</span>@else<a href="/login">Войти</a>@endif',
+    '</header>',
+    '{% for item in items %}<article class="card" data-id="{{ item.id }}"><h2>{{ item.title }}</h2>',
+    '<p>Цена: <b>${{ item.price }}</b> <em>со скидкой</em></p>',
+    '<?php if ($item->isNew()): ?><span class="badge">NEW</span><?php endif; ?>',
+    '</article>{% else %}<p class="empty">Ничего не найдено</p>{% endfor %}',
+    '<% if admin? %><a href="/admin">Панель</a><% end %>',
+    '<img src="/i/x.png" alt=""><input type=text disabled="disabled" class="">',
+    '<pre>  сохраняем\n  как есть</pre>',
+    '<script type="text/javascript">',
+    '      function boot(){ return `${window.name} @{tpl}`; }',
+    '<\/script>',
+    '</div></body></html>'
+  ].join('\n');
+
+  $('btnSample').onclick = function () {
+    input.value = SAMPLE;
+    $('inMeta').textContent = meta(input.value);
+    paintGutter(input, $('gutIn'));
+    run('format');
+  };
+
+  /* ---------------- boot sequence ---------------- */
+  var BOOT = [
+    'MARKUP TERMINAL // UNIT 2.1',
+    '----------------------------------------',
+    'CORE MEMORY ............ 640K OK',
+    'TOKENIZER .............. LOADED',
+    'TREE BUILDER ........... LOADED',
+    'COMPRESSOR ............. L1 / L2 / L3',
+    'TEMPLATE DRIVERS ....... BLADE · TWIG · JINJA · ERB · PHP · MUSTACHE · ${} · @{}',
+    '----------------------------------------',
+    'CTRL+ENTER .... форматировать',
+    'CTRL+SHIFT+M .. сжать',
+    'CTRL+SHIFT+C .. копировать результат',
+    '',
+    'ОЖИДАНИЕ ВВОДА ▮'
+  ];
+  (function bootSeq() {
+    var i = 0;
+    (function step() {
+      if (i >= BOOT.length) { $('stStatus').textContent = 'готов'; return; }
+      output.value += (i ? '\n' : '') + BOOT[i++];
+      paintGutter(output, $('gutOut'));
+      setTimeout(step, 55);
+    })();
+  })();
+
+  paintGutter(input, $('gutIn'));
+  input.focus();
+})();
+</script>
+</body>
+</html>
