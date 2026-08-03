@@ -604,61 +604,71 @@
     lowercase: false
   };
 
-  function isInlineNode(node) {
-    if (node.type === 'text') return true;
-    if (node.type === 'tplleaf') return true;
-    if (node.type === 'el') return INLINE.has(node.name) && node.name !== 'textarea' && node.name !== 'svg';
-    return false;
-  }
-
-  function nodeLength(node) {
-    if (node.type === 'text') return node.tok.v.replace(/\s+/g, ' ').trim().length;
-    if (node.type === 'tplleaf') return node.tok.v.length;
-    if (node.type === 'el') {
-      var len = openTag(node.tok).length + (node.tok.self ? 0 : closeTag(node).length);
-      for (var i = 0; i < node.children.length; i++) len += nodeLength(node.children[i]);
-      return len;
+  /**
+   * Узел, который можно склеить в общую строку: текст, интерполяция
+   * и строчные теги, целиком состоящие из такого же содержимого.
+   *
+   * Перенос строки внутри строчного потокаHTML превращается в пробел,
+   * поэтому «…Мос</span>ковска…» ломать нельзя ни при какой длине.
+   */
+  function isInlineRenderable(node) {
+    if (node.type === 'text' || node.type === 'tplleaf') return true;
+    // шаблонный блок с чисто строчным содержимым тоже не разрывается:
+    // {% if %}5{% else %}6{% endif %} посреди текста должен остаться слитным
+    if (node.type === 'tpl') {
+      if (!node.closeTok) return false;
+      // многострочная вставка (обычно <?php … ?>) остаётся блоком
+      if (node.tok.v.indexOf('\n') !== -1 || node.closeTok.v.indexOf('\n') !== -1) return false;
+      for (var k = 0; k < node.children.length; k++) {
+        var ch = node.children[k];
+        if (ch.type === 'tplmid') continue;
+        if (!isInlineRenderable(ch)) return false;
+      }
+      return true;
     }
-    if (node.type === 'comment') return node.tok.v.length;
-    return 0;
+    if (node.type !== 'el') return false;
+    if (!INLINE.has(node.name)) return false;
+    if (RAW_TEXT.has(node.name) || PRE_TEXT.has(node.name)) return false;
+    if (node.closed === false) return false;
+    for (var i = 0; i < node.children.length; i++) {
+      if (!isInlineRenderable(node.children[i])) return false;
+    }
+    return true;
   }
 
-  function canInline(node, opts) {
+  function canInline(node) {
     if (node.type !== 'el') return false;
     if (RAW_TEXT.has(node.name) || PRE_TEXT.has(node.name)) return false;
-    var kids = node.children.filter(function (c) {
-      return !(c.type === 'text' && !c.tok.v.trim());
-    });
-    if (!kids.length) return true;
-
-    var hasElement = false;
-    for (var i = 0; i < kids.length; i++) {
-      var c = kids[i];
-      if (!isInlineNode(c)) return false;
-      if (c.type === 'el') {
-        hasElement = true;
-        if (!canInline(c, opts)) return false;
-      }
-    }
-    // pure text / interpolation content — always keep on a single line
-    if (!hasElement) return true;
-    return nodeLength(node) + 0 <= opts.inlineMax;
-  }
-
-  function inlineRender(node, opts) {
-    var out = '';
     for (var i = 0; i < node.children.length; i++) {
       var c = node.children[i];
+      if (c.type === 'text' && !c.tok.v.trim()) continue;
+      if (!isInlineRenderable(c)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * trimEdges — обрезать пробелы по краям. Разрешено только там, где край
+   * упирается в блочный элемент: внутри строчных тегов «<b> x </b>» пробел
+   * отрисовывается, и терять его нельзя.
+   */
+  function inlineRender(children, opts, trimEdges) {
+    var out = '';
+    for (var i = 0; i < children.length; i++) {
+      var c = children[i];
       if (c.type === 'text') {
-        var raw = c.tok.v;
-        var collapsed = raw.replace(/\s+/g, ' ');
-        if (i === 0) collapsed = collapsed.replace(/^\s+/, '');
-        if (i === node.children.length - 1) collapsed = collapsed.replace(/\s+$/, '');
+        var collapsed = c.tok.v.replace(/\s+/g, ' ');
+        if (trimEdges && i === 0) collapsed = collapsed.replace(/^ /, '');
+        if (trimEdges && i === children.length - 1) collapsed = collapsed.replace(/ $/, '');
         out += collapsed;
       } else if (c.type === 'tplleaf' || c.type === 'tplmid') {
         out += c.tok.v;
+      } else if (c.type === 'tpl') {
+        out += c.tok.v + inlineRender(c.children, opts) +
+               (c.closeTok ? c.closeTok.v : '');
       } else if (c.type === 'el') {
-        out += openTag(c.tok, opts) + (c.tok.self ? '' : inlineRender(c, opts) + closeTag(c, opts));
+        out += openTag(c.tok, opts) +
+               (c.tok.self ? '' : inlineRender(c.children, opts) + closeTag(c, opts));
       } else if (c.type === 'comment') {
         out += c.tok.v;
       } else if (c.type === 'raw') {
@@ -826,7 +836,7 @@
 
           if (PRE_TEXT.has(node.name)) {
             var rawKid = node.children.find(function (c) { return c.type === 'raw'; });
-            var content = rawKid ? rawKid.tok.v : inlineRender(node, opts);
+            var content = rawKid ? rawKid.tok.v : inlineRender(node.children, opts);
             // byte-for-byte: never insert or drop a character inside pre/textarea
             protectedChunks.push(content);
             lines.push(pad(d) + open + SENTINEL + (protectedChunks.length - 1) + SENTINEL +
@@ -854,8 +864,8 @@
 
           if (!kids.length) { push(d, open + closeTag(node, opts)); return; }
 
-          if (canInline(node, opts)) {
-            push(d, open + inlineRender(node, opts) + closeTag(node, opts));
+          if (canInline(node)) {
+            push(d, open + inlineRender(node.children, opts, true) + closeTag(node, opts));
             return;
           }
 
@@ -867,17 +877,33 @@
       }
     }
 
+    // Соседние строчные узлы собираются в одну строку. Разрывать их нельзя:
+    // перенос строки в HTML равен пробелу и изменил бы отрисовку текста.
     function renderChildren(node, d) {
       var kids = node.children;
+      var run = [];
+
+      function flushRun() {
+        if (!run.length) return;
+        var s = inlineRender(run, opts, true).trim();
+        if (s) push(d, s);
+        else if (opts.keepBlankLines && lines.length && lines[lines.length - 1] !== '') {
+          var nl = 0;
+          run.forEach(function (c) {
+            if (c.type === 'text') nl += (c.tok.v.match(/\n/g) || []).length;
+          });
+          if (nl > 1) lines.push('');
+        }
+        run = [];
+      }
+
       for (var i = 0; i < kids.length; i++) {
         var c = kids[i];
-        if (c.type === 'text' && !c.tok.v.trim()) {
-          if (opts.keepBlankLines && (c.tok.v.match(/\n/g) || []).length > 1 &&
-              lines.length && lines[lines.length - 1] !== '') lines.push('');
-          continue;
-        }
+        if (isInlineRenderable(c)) { run.push(c); continue; }
+        flushRun();
         walk(c, d);
       }
+      flushRun();
     }
 
     walk(built.root, 0);
@@ -1017,8 +1043,9 @@
           var pB = isBlockBoundary(prevSig(j), level);
           var nB = isBlockBoundary(nextSig(j), level);
 
+          // пробел у границы блочного элемента не отрисовывается — его можно убрать
           if (blank) {
-            if (pB && nB) out.push(level === 1 ? '\n' : '');
+            if (pB || nB) out.push(level === 1 ? '\n' : '');
             else out.push(' ');
             break;
           }
