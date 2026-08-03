@@ -409,7 +409,7 @@
       var tk = toks[i];
 
       if (tk.t === 'open') {
-        var node = { type: 'el', name: tk.name, tok: tk, children: [] };
+        var node = { type: 'el', name: tk.name, tok: tk, children: [], closed: tk.self };
         add(node);
         if (!tk.self) stack.push(node);
         continue;
@@ -580,7 +580,10 @@
     return out;
   }
 
+  // Закрывающий тег выводится только если он реально был в исходнике:
+  // форматтер не дописывает теги за автором.
   function closeTag(node, opts) {
+    if (node.closed === false) return '';
     return '</' + tagName(node.tok, opts) + '>';
   }
 
@@ -724,6 +727,49 @@
       if (tail !== null) push(d, tail);
     }
 
+    // Комментарии: если внутри разметка (в том числе условные комментарии
+    // <!--[if mso]> … <![endif]-->), содержимое форматируется по вложенности.
+    function renderComment(cv, d) {
+      var trimmed = cv.trim();
+      if (trimmed.indexOf('\n') === -1) { push(d, trimmed); return; }
+
+      var m = /^(<!--\[[^\]]*\]>)([\s\S]*?)(<!\[endif\]\s*-->)$/i.exec(trimmed) ||
+              /^(<!--)([\s\S]*?)(-->)$/.exec(trimmed);
+
+      if (m && /<[a-zA-Z\/]/.test(m[2])) {
+        push(d, m[1]);
+        renderFragment(m[2], d + 1);
+        push(d, m[3]);
+        return;
+      }
+
+      var i = cv.indexOf('\n');
+      push(d, cv.slice(0, i).trim());
+      reindentBlock(cv.slice(i + 1), pad(d)).forEach(function (l) { lines.push(l); });
+    }
+
+    // Фрагмент разметки внутри комментария. Он почти всегда несбалансирован
+    // (открывающая часть в одном комментарии, закрывающая — в другом),
+    // поэтому блок из одних закрывающих тегов раскладывается «лесенкой».
+    function renderFragment(body, d) {
+      var inner = beautify(body, opts).code.replace(/\s+$/, '');
+      if (!inner) return;
+      var arr = inner.split('\n');
+      var solid = arr.filter(function (l) { return l.trim(); });
+      if (!solid.length) return;
+
+      var allClosing = solid.every(function (l) { return /^\s*<\/[a-zA-Z]/.test(l); });
+      if (allClosing) {
+        for (var i = 0; i < solid.length; i++) {
+          push(d + solid.length - 1 - i, solid[i].trim());
+        }
+        return;
+      }
+      for (var j = 0; j < arr.length; j++) {
+        lines.push(arr[j].trim() ? pad(d) + arr[j] : '');
+      }
+    }
+
     function walk(node, d) {
       switch (node.type) {
 
@@ -746,15 +792,9 @@
           break;
         }
 
-        case 'comment': {
-          var cv = node.tok.v;
-          if (cv.indexOf('\n') === -1) { push(d, cv.trim()); return; }
-          var head = cv.slice(0, cv.indexOf('\n'));
-          var tail = cv.slice(cv.indexOf('\n') + 1);
-          push(d, head.replace(/\s+$/, ''));
-          reindentBlock(tail, pad(d)).forEach(function (l) { lines.push(l); });
+        case 'comment':
+          renderComment(node.tok.v, d);
           break;
-        }
 
         case 'stray':
           push(d, '</' + node.tok.name + '>');
@@ -821,7 +861,7 @@
 
           push(d, open);
           renderChildren(node, d + 1);
-          push(d, closeTag(node, opts));
+          if (node.closed) push(d, closeTag(node, opts));
           break;
         }
       }
@@ -940,9 +980,16 @@
           out.push(t.v.replace(/\s+/g, ' ').trim());
           break;
 
-        case 'comment':
-          out.push(t.v.replace(/\s*\n\s*/g, level >= 2 ? ' ' : '\n'));
+        case 'comment': {
+          var cm = level >= 2 &&
+            /^(<!--\[[^\]]*\]>)([\s\S]*?)(<!\[endif\]\s*-->)$/i.exec(t.v.trim());
+          if (cm && /<[a-zA-Z\/]/.test(cm[2])) {
+            out.push(cm[1] + minify(cm[2], level) + cm[3]);
+          } else {
+            out.push(t.v.replace(/\s*\n\s*/g, level >= 2 ? ' ' : '\n'));
+          }
           break;
+        }
 
         case 'open':
           out.push(openTag(t, opts));
