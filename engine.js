@@ -234,6 +234,7 @@
         rawName: rawName,
         attrs: attrs,
         self: self || VOID.has(lower),
+        slash: self,                 // в исходнике действительно был « />»
         void: VOID.has(lower)
       },
       end: j
@@ -252,7 +253,20 @@
         if (src.startsWith('<!--', i)) {
           var e = src.indexOf('-->', i + 4);
           e = e === -1 ? n : e + 3;
-          flush(); toks.push({ t: 'comment', v: src.slice(i, e) }); i = e; continue;
+          var cv = src.slice(i, e);
+          // Условный комментарий Outlook оборачивает настоящую разметку.
+          // Раскрываем его в общий поток токенов: теги внутри должны попасть
+          // в общий стек, иначе содержимое после <![endif]--> теряет вложенность.
+          var cm = /^(<!--\[[^\]]*\]>)([\s\S]*)(<!\[endif\]\s*-->)$/i.exec(cv);
+          if (cm && /<[a-zA-Z\/]/.test(cm[2])) {
+            flush();
+            toks.push({ t: 'condopen', v: cm[1] });
+            var inner = tokenize(cm[2]);
+            for (var ii = 0; ii < inner.length; ii++) toks.push(inner[ii]);
+            toks.push({ t: 'condclose', v: cm[3] });
+            i = e; continue;
+          }
+          flush(); toks.push({ t: 'comment', v: cv }); i = e; continue;
         }
         if (src.startsWith('<![', i)) {                     // CDATA / downlevel-revealed
           var ce = src.indexOf(']>', i);
@@ -437,6 +451,9 @@
         continue;
       }
 
+      if (tk.t === 'condopen' || tk.t === 'condclose') {
+        add({ type: 'cond', tok: tk }); continue;
+      }
       if (tk.t === 'raw') { add({ type: 'raw', tok: tk }); continue; }
       if (tk.t === 'text') { add({ type: 'text', tok: tk }); continue; }
       if (tk.t === 'comment') { add({ type: 'comment', tok: tk }); continue; }
@@ -531,9 +548,10 @@
       if (s) parts.push(s);
     }
     var body = parts.length ? name + ' ' + parts.join(' ') : name;
-    // foreign content (SVG/MathML) and custom elements must keep the slash
+    // foreign content (SVG/MathML) and custom elements must keep the slash;
+    // у void-тегов слеш сохраняем ровно так, как его написал автор
     if (tok.self && !tok.void) return '<' + body + ' />';
-    if (tok.void) return '<' + body + '>';
+    if (tok.void) return '<' + body + (tok.slash && !(opts && opts.dropSlash) ? ' />' : '>');
     return '<' + body + '>';
   }
 
@@ -806,6 +824,10 @@
           renderComment(node.tok.v, d);
           break;
 
+        case 'cond':
+          push(d, node.tok.v.replace(/\s+/g, ' ').trim());
+          break;
+
         case 'stray':
           push(d, '</' + node.tok.name + '>');
           break;
@@ -959,6 +981,7 @@
     if (tok.t === 'close') return !INLINE.has(tok.name);
     if (tok.t === 'doctype') return true;
     if (tok.t === 'comment') return true;
+    if (tok.t === 'condopen' || tok.t === 'condclose') return true;
     // control-flow template blocks behave like block elements on the top level
     if (tok.t === 'tpl' && level >= 3) {
       var c = classifyTpl(tok);
@@ -1006,16 +1029,14 @@
           out.push(t.v.replace(/\s+/g, ' ').trim());
           break;
 
-        case 'comment': {
-          var cm = level >= 2 &&
-            /^(<!--\[[^\]]*\]>)([\s\S]*?)(<!\[endif\]\s*-->)$/i.exec(t.v.trim());
-          if (cm && /<[a-zA-Z\/]/.test(cm[2])) {
-            out.push(cm[1] + minify(cm[2], level) + cm[3]);
-          } else {
-            out.push(t.v.replace(/\s*\n\s*/g, level >= 2 ? ' ' : '\n'));
-          }
+        case 'condopen':
+        case 'condclose':
+          out.push(t.v.replace(/\s+/g, ' ').trim());
           break;
-        }
+
+        case 'comment':
+          out.push(t.v.replace(/\s*\n\s*/g, level >= 2 ? ' ' : '\n'));
+          break;
 
         case 'open':
           out.push(openTag(t, opts));
