@@ -37,6 +37,7 @@
 ```
 index.html    UI, стили, логика приложения
 engine.js     токенайзер + форматтер + минификатор (работает и в Node)
+favicon.svg   иконка (нужна рядом с index.html, иначе вкладка будет без значка)
 README.md     этот файл
 ```
 
@@ -70,7 +71,7 @@ python3 -m http.server 8000
 2. **Repository name** — например `alien-markup`. Видимость — **Public** (для бесплатного Pages это обязательно).
 3. Не отмечайте «Add a README file». Нажмите **Create repository**.
 4. На странице пустого репозитория нажмите **uploading an existing file**.
-5. Перетащите туда `index.html`, `engine.js` и `README.md`.
+5. Перетащите туда `index.html`, `engine.js`, `favicon.svg` и `README.md`.
 6. Внизу нажмите **Commit changes**.
 7. Откройте **Settings → Pages** (левое меню).
 8. В блоке **Build and deployment**:
@@ -88,7 +89,7 @@ cd путь/к/проекту
 
 # 2. инициализация
 git init
-git add index.html engine.js README.md
+git add index.html engine.js favicon.svg README.md
 git commit -m "Alien Markup: первый релиз"
 git branch -M main
 

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Alien Markup</title>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#4dffa6" stop-opacity=".28"/>
+      <stop offset="100%" stop-color="#4dffa6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="6" fill="#070b09"/>
+  <rect width="32" height="32" rx="6" fill="url(#glow)"/>
+
+  <!-- вложенность: три ступени отступа -->
+  <g fill="#4dffa6">
+    <rect x="5"  y="7"    width="22" height="3.2" rx="1.6"/>
+    <rect x="10" y="14.4" width="17" height="3.2" rx="1.6"/>
+    <rect x="15" y="21.8" width="12" height="3.2" rx="1.6"/>
+  </g>
+
+  <!-- курсор терминала -->
+  <rect x="5" y="21.8" width="3.2" height="3.2" rx="1" fill="#4dffa6" opacity=".45"/>
+</svg>
