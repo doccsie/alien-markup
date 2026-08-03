@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MARKUP TERMINAL — форматтер и минификатор HTML</title>
+<title>ALIEN MARKUP — форматтер и минификатор HTML</title>
 <meta name="description" content="Форматирование и сжатие HTML-верстки с поддержкой шаблонизаторов: Blade, Twig, Jinja, ERB, Mustache, PHP.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23070b09'/><text y='24' x='4' font-family='monospace' font-size='20' fill='%234dffa6'>&lt;/&gt;</text></svg>">
 <style>
 /* ============================================================
-   MARKUP TERMINAL — retrofuture CRT console
+   ALIEN MARKUP — retrofuture CRT console
    ============================================================ */
 :root{
   --bg:#070b09;
@@ -208,7 +208,7 @@ footer b{color:var(--ph); font-weight:400}
 
   <header>
     <div class="brand">
-      <h1>Markup Terminal</h1>
+      <h1>Alien Markup</h1>
       <span class="ver">unit 2.1 / semiotic markup processor</span>
     </div>
     <div class="leds">
@@ -294,10 +294,10 @@ footer b{color:var(--ph); font-weight:400}
 
   /* ---------------- theme ---------------- */
   var THEMES = ['green', 'amber', 'ice'];
-  var themeIdx = Number(localStorage.getItem('mt.theme') || 0);
+  var themeIdx = Number(localStorage.getItem('am.theme') || 0);
   function applyTheme() {
     document.documentElement.dataset.theme = THEMES[themeIdx];
-    localStorage.setItem('mt.theme', themeIdx);
+    localStorage.setItem('am.theme', themeIdx);
   }
   applyTheme();
   $('themeBtn').onclick = function () {
@@ -307,7 +307,7 @@ footer b{color:var(--ph); font-weight:400}
 
   /* ---------------- counters ---------------- */
   var todayKey = new Date().toISOString().slice(0, 10);
-  var stats = JSON.parse(localStorage.getItem('mt.stats') || '{}');
+  var stats = JSON.parse(localStorage.getItem('am.stats') || '{}');
   if (stats.date !== todayKey) { stats.date = todayKey; stats.today = 0; }
   stats.total = stats.total || 0;
   var session = 0;
@@ -321,9 +321,9 @@ footer b{color:var(--ph); font-weight:400}
     stats.today = (stats.today || 0) + 1;
     stats.total = (stats.total || 0) + 1;
     session++;
-    localStorage.setItem('mt.stats', JSON.stringify(stats));
+    localStorage.setItem('am.stats', JSON.stringify(stats));
     paintStats();
-    if (window.MT_GLOBAL_COUNTER) window.MT_GLOBAL_COUNTER();
+    if (window.AM_GLOBAL_COUNTER) window.AM_GLOBAL_COUNTER();
   }
   paintStats();
 
@@ -397,11 +397,11 @@ footer b{color:var(--ph); font-weight:400}
     var res, warnings;
     try {
       if (mode === 'format') {
-        var r = MTEngine.beautify(src, { indent: indentString() });
-        res = r.code; warnings = r.warnings.concat(MTEngine.analyze(src).filter(isExtra));
+        var r = AMEngine.beautify(src, { indent: indentString() });
+        res = r.code; warnings = r.warnings.concat(AMEngine.analyze(src).filter(isExtra));
       } else {
-        res = MTEngine.minify(src, level);
-        warnings = MTEngine.analyze(src);
+        res = AMEngine.minify(src, level);
+        warnings = AMEngine.analyze(src);
       }
     } catch (e) {
       $('stStatus').textContent = 'сбой парсера';
@@ -488,7 +488,7 @@ footer b{color:var(--ph); font-weight:400}
     var blob = new Blob([output.value], { type: 'text/html;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'markup-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.html';
+    a.download = 'alien-markup-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.html';
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     toast('файл сохранён');
@@ -559,7 +559,7 @@ footer b{color:var(--ph); font-weight:400}
 
   /* ---------------- boot sequence ---------------- */
   var BOOT = [
-    'MARKUP TERMINAL // UNIT 2.1',
+    'ALIEN MARKUP // UNIT 2.1',
     '----------------------------------------',
     'CORE MEMORY ............ 640K OK',
     'TOKENIZER .............. LOADED',

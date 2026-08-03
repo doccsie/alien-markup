@@ -1,4 +1,4 @@
-# MARKUP TERMINAL
+# ALIEN MARKUP
 
 Веб-приложение для форматирования и сжатия HTML-верстки. Работает целиком в браузере: ничего не отправляется на сервер, нет зависимостей, нет сборки.
 
@@ -89,7 +89,7 @@ cd путь/к/проекту
 # 2. инициализация
 git init
 git add index.html engine.js README.md
-git commit -m "Markup Terminal: первый релиз"
+git commit -m "Alien Markup: первый релиз"
 git branch -M main
 
 # 3. создайте пустой репозиторий на github.com, затем:
@@ -140,7 +140,7 @@ Pages пересоберётся сам за ~1 минуту. Если изме�
 
 ```html
 <script>
-  window.MT_GLOBAL_COUNTER = function () {
+  window.AM_GLOBAL_COUNTER = function () {
     fetch('https://ВАШ-ЭНДПОИНТ/hit', { method: 'POST' })
       .then(r => r.json())
       .then(d => { document.getElementById('stTotal').textContent = d.total; })
@@ -149,7 +149,7 @@ Pages пересоберётся сам за ~1 минуту. Если изме�
 </script>
 ```
 
-Приложение само вызовет `MT_GLOBAL_COUNTER()` после каждой операции. В роли эндпоинта подойдёт Cloudflare Worker с KV, Supabase, Firebase или любой counter-as-a-service.
+Приложение само вызовет `AM_GLOBAL_COUNTER()` после каждой операции. В роли эндпоинта подойдёт Cloudflare Worker с KV, Supabase, Firebase или любой counter-as-a-service.
 
 ---
 

@@ -1,12 +1,12 @@
 /* =============================================================
- *  MARKUP TERMINAL — engine.js
+ *  ALIEN MARKUP — engine.js
  *  HTML beautifier / minifier with template-language awareness.
  *  Zero dependencies. Works in the browser and in Node.
  * ============================================================= */
 (function (root, factory) {
   var api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
-  root.MTEngine = api;
+  root.AMEngine = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
