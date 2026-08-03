@@ -590,6 +590,10 @@
 
   var SENTINEL = '';   // private-use char: never appears in real markup
 
+  // Вставки в фигурных скобках считаем атомарной строкой: всегда одна строка,
+  // содержимое не разбирается и не переносится.
+  var BRACE_TPL = { atbrace: 1, interp: 1, mustache: 1, curly: 1 };
+
   var DEFAULTS = {
     indent: '  ',
     inlineMax: 100,
@@ -694,9 +698,14 @@
       var v = tok.v;
       if (v.indexOf('\n') === -1) { push(d, squishTpl(v)); return; }
 
-      // короткое выражение без комментариев внутри — схлопываем в одну строку
       var oneLine = v.replace(/\s*\n\s*/g, ' ').replace(/[ \t]{2,}/g, ' ');
-      var risky = /(^|[^:])\/\/|#[^}]*$|<!--/.test(v) || tok.k === 'php' || tok.k === 'erb';
+
+      // Вставка в фигурных скобках — атомарная строка от открытия до закрытия:
+      // всегда одна строка, независимо от длины, содержимое не интерпретируется.
+      if (BRACE_TPL[tok.k]) { push(d, oneLine); return; }
+
+      // Короткое выражение без строчных комментариев внутри — тоже схлопываем.
+      var risky = /(^|[^:])\/\/|<!--/.test(v) || tok.k === 'php' || tok.k === 'erb';
       if (!risky && oneLine.length + pad(d).length <= opts.inlineMax) {
         push(d, oneLine);
         return;
@@ -872,6 +881,7 @@
   function collapseTpl(tok) {
     var v = tok.v;
     if (v.indexOf('\n') === -1) return v;
+    if (BRACE_TPL[tok.k]) return v.replace(/\s*\n\s*/g, ' ').replace(/[ \t]{2,}/g, ' ');
     if (tok.k === 'php' || tok.k === 'erb') return v;
     if (/(^|[^:])\/\//.test(v)) return v;
     return v.replace(/\s*\n\s*/g, ' ').replace(/[ \t]{2,}/g, ' ');
