@@ -272,9 +272,14 @@
   }
 
   function tokenize(src) {
-    var toks = [], i = 0, n = src.length, buf = '';
+    var toks = [], i = 0, n = src.length, buf = '', bufStart = 0;
 
-    function flush() { if (buf) { toks.push({ t: 'text', v: buf }); buf = ''; } }
+    function flush() {
+      if (!buf) return;
+      toks.push({ t: 'text', v: buf, s: bufStart, e: bufStart + buf.length });
+      buf = '';
+    }
+    function eat(k) { if (!buf) bufStart = i; buf += k; }
 
     while (i < n) {
       var c = src[i];
@@ -290,33 +295,38 @@
           var cm = /^(<!--\[[^\]]*\]>)([\s\S]*)(<!\[endif\]\s*-->)$/i.exec(cv);
           if (cm && /<[a-zA-Z\/]/.test(cm[2])) {
             flush();
-            toks.push({ t: 'condopen', v: cm[1] });
+            toks.push({ t: 'condopen', v: cm[1], s: i, e: i + cm[1].length });
             var inner = tokenize(cm[2]);
-            for (var ii = 0; ii < inner.length; ii++) toks.push(inner[ii]);
-            toks.push({ t: 'condclose', v: cm[3] });
+            var shift = i + cm[1].length;
+            for (var ii = 0; ii < inner.length; ii++) {
+              inner[ii].s += shift; inner[ii].e += shift;
+              toks.push(inner[ii]);
+            }
+            toks.push({ t: 'condclose', v: cm[3], s: e - cm[3].length, e: e });
             i = e; continue;
           }
-          flush(); toks.push({ t: 'comment', v: cv }); i = e; continue;
+          flush(); toks.push({ t: 'comment', v: cv, s: i, e: e }); i = e; continue;
         }
         if (src.startsWith('<![', i)) {                     // CDATA / downlevel-revealed
           var ce = src.indexOf(']>', i);
           ce = ce === -1 ? n : ce + 2;
-          flush(); toks.push({ t: 'comment', v: src.slice(i, ce), keep: true }); i = ce; continue;
+          flush(); toks.push({ t: 'comment', v: src.slice(i, ce), keep: true, s: i, e: ce }); i = ce; continue;
         }
         if (src.startsWith('<!', i)) {
           var de = src.indexOf('>', i);
           de = de === -1 ? n : de + 1;
-          flush(); toks.push({ t: 'doctype', v: src.slice(i, de) }); i = de; continue;
+          flush(); toks.push({ t: 'doctype', v: src.slice(i, de), s: i, e: de }); i = de; continue;
         }
         if (src[i + 1] === '?' || src[i + 1] === '%') {
           var tp = matchTplAt(src, i);
-          flush(); toks.push({ t: 'tpl', v: tp.v, k: tp.k }); i = tp.end; continue;
+          flush(); toks.push({ t: 'tpl', v: tp.v, k: tp.k, s: i, e: tp.end }); i = tp.end; continue;
         }
         if (src.startsWith('</', i)) {
           var cm = /^<\/\s*([a-zA-Z][\w:.\-]*)\s*>/.exec(src.slice(i));
           if (cm) {
             flush();
-            toks.push({ t: 'close', name: cm[1].toLowerCase(), rawName: cm[1] });
+            toks.push({ t: 'close', name: cm[1].toLowerCase(), rawName: cm[1],
+                        s: i, e: i + cm[0].length });
             i += cm[0].length; continue;
           }
         }
@@ -324,6 +334,8 @@
           var parsed = parseTag(src, i);
           if (parsed) {
             flush();
+            parsed.token.s = i;
+            parsed.token.e = parsed.end;
             toks.push(parsed.token);
             i = parsed.end;
             var nm = parsed.token.name;
@@ -331,24 +343,24 @@
               var re = new RegExp('</\\s*' + nm + '\\s*>', 'i');
               var mm = re.exec(src.slice(i));
               var stop = mm ? i + mm.index : n;
-              toks.push({ t: 'raw', v: src.slice(i, stop), name: nm });
+              toks.push({ t: 'raw', v: src.slice(i, stop), name: nm, s: i, e: stop });
               i = stop;
             }
             continue;
           }
         }
-        buf += c; i++; continue;
+        eat(c); i++; continue;
       }
 
       var t = matchTplAt(src, i);
       if (t) {
-        if (t.k === 'text') { buf += t.v; i = t.end; continue; }
+        if (t.k === 'text') { eat(t.v); i = t.end; continue; }
         flush();
-        toks.push({ t: 'tpl', v: t.v, k: t.k, name: t.name });
+        toks.push({ t: 'tpl', v: t.v, k: t.k, name: t.name, s: i, e: t.end });
         i = t.end; continue;
       }
 
-      buf += c; i++;
+      eat(c); i++;
     }
     flush();
     return toks;
@@ -465,14 +477,17 @@
           if (stack[s].type === 'el' && stack[s].name === tk.name) { idx = s; break; }
         }
         if (idx === -1) {
-          warnings.push({ level: 'err', fix: 'stray', msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
+          warnings.push({ level: 'err', fix: 'stray', pos: tk.s,
+            msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
           add({ type: 'stray', tok: tk });
         } else {
           for (var p = stack.length - 1; p > idx; p--) {
             if (stack[p].type === 'el') {
-              warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
+              warnings.push({ level: 'warn', fix: 'unclosed', pos: stack[p].tok.s,
+                msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
             } else {
-              warnings.push({ level: 'warn', msg: 'Незакрытый блок ' + short(stack[p].tok.v) });
+              warnings.push({ level: 'warn', pos: stack[p].tok.s,
+                msg: 'Незакрытый блок ' + short(stack[p].tok.v) });
             }
           }
           stack[idx].closed = true;
@@ -504,7 +519,8 @@
           } else {
             for (var r = stack.length - 1; r > ti; r--) {
               if (stack[r].type === 'el') {
-                warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
+                warnings.push({ level: 'warn', fix: 'unclosed', pos: stack[r].tok.s,
+                msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
               }
             }
             stack[ti].closeTok = tk;
@@ -526,9 +542,11 @@
 
     for (var f = stack.length - 1; f > 0; f--) {
       if (stack[f].type === 'el') {
-        warnings.push({ level: 'err', fix: 'unclosed', msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
+        warnings.push({ level: 'err', fix: 'unclosed', pos: stack[f].tok.s,
+          msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
       } else {
-        warnings.push({ level: 'err', msg: 'Шаблонный блок ' + short(stack[f].tok.v) + ' не закрыт' });
+        warnings.push({ level: 'err', pos: stack[f].tok.s,
+          msg: 'Шаблонный блок ' + short(stack[f].tok.v) + ' не закрыт' });
       }
     }
 
@@ -1181,27 +1199,53 @@
    * Список проблем со скобками и парностью тегов.
    * Всё, что сюда попадает, умеет чинить repair().
    */
+  /** Быстрый перевод смещения в номер строки (1-based). */
+  function lineIndex(src) {
+    var starts = [0];
+    for (var i = 0; i < src.length; i++) if (src[i] === '\n') starts.push(i + 1);
+    return function (pos) {
+      if (pos == null) return 0;
+      var lo = 0, hi = starts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
+      }
+      return lo + 1;
+    };
+  }
+
   function checkTags(src) {
     var items = [];
     var toks = tokenize(src);
+    var lineAt = lineIndex(src);
 
     toks.forEach(function (t) {
       if (t.t === 'text') {
         // «</tr» без «>» токенайзер оставляет обычным текстом
-        var m = t.v.match(BROKEN_CLOSE);
-        if (m) m.forEach(function (x) {
-          items.push({ level: 'err', msg: 'Пропущен «>»: ' + x + ' → ' + x + '>' });
-        });
+        var re = /<\/([a-zA-Z][\w:.\-]*)/g, m;
+        while ((m = re.exec(t.v))) {
+          items.push({
+            level: 'err', fix: 'bracket', pos: t.s + m.index,
+            line: lineAt(t.s + m.index),
+            msg: 'Пропущен «>»: ' + m[0] + ' → ' + m[0] + '>'
+          });
+        }
       }
       if (t.t === 'open' && t.unterminated) {
-        items.push({ level: 'err', msg: 'Пропущен «>» у <' + t.name + '>' });
+        items.push({
+          level: 'err', fix: 'bracket', pos: t.s, line: lineAt(t.s),
+          msg: 'Пропущен «>» у <' + t.name + '>'
+        });
       }
     });
 
     buildTree(toks).warnings.forEach(function (w) {
-      if (w.fix) items.push(w);
+      if (!w.fix) return;
+      w.line = lineAt(w.pos);
+      items.push(w);
     });
 
+    items.sort(function (a, b) { return (a.line || 0) - (b.line || 0); });
     return items;
   }
 

@@ -213,7 +213,20 @@ main{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:0}
   border-right:1px solid var(--ph-ghost); background:rgba(0,0,0,.25);
   min-width:52px; white-space:pre; text-shadow:none;
 }
+/* подсветка проблемных строк */
+.gutter i{
+  font-style:normal; color:var(--err); font-weight:400;
+  text-shadow:0 0 9px var(--err);
+}
+.marks{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0}
+.marks div{
+  position:absolute; left:0; right:0;
+  background:color-mix(in srgb, var(--err) 15%, transparent);
+  border-left:2px solid var(--err);
+  box-shadow:inset 0 0 22px -12px var(--err);
+}
 textarea{
+  position:relative; z-index:1;
   flex:1; width:100%; resize:none; border:0; outline:0; padding:10px 14px;
   background:transparent; color:var(--ph); font-family:inherit;
   font-size:var(--code); line-height:1.45; white-space:pre; overflow:auto;
@@ -342,6 +355,7 @@ footer b{color:var(--ph); font-weight:400}
       </div>
       <div class="editor">
         <div class="gutter" id="gutIn">1</div>
+        <div class="marks" id="marksIn" aria-hidden="true"></div>
         <textarea id="input" spellcheck="false" autocomplete="off"
           placeholder="Вставьте HTML сюда, либо перетащите файл в окно…"></textarea>
       </div>
@@ -650,9 +664,14 @@ footer b{color:var(--ph); font-weight:400}
   }
 
   function tokenize(src) {
-    var toks = [], i = 0, n = src.length, buf = '';
+    var toks = [], i = 0, n = src.length, buf = '', bufStart = 0;
 
-    function flush() { if (buf) { toks.push({ t: 'text', v: buf }); buf = ''; } }
+    function flush() {
+      if (!buf) return;
+      toks.push({ t: 'text', v: buf, s: bufStart, e: bufStart + buf.length });
+      buf = '';
+    }
+    function eat(k) { if (!buf) bufStart = i; buf += k; }
 
     while (i < n) {
       var c = src[i];
@@ -668,33 +687,38 @@ footer b{color:var(--ph); font-weight:400}
           var cm = /^(<!--\[[^\]]*\]>)([\s\S]*)(<!\[endif\]\s*-->)$/i.exec(cv);
           if (cm && /<[a-zA-Z\/]/.test(cm[2])) {
             flush();
-            toks.push({ t: 'condopen', v: cm[1] });
+            toks.push({ t: 'condopen', v: cm[1], s: i, e: i + cm[1].length });
             var inner = tokenize(cm[2]);
-            for (var ii = 0; ii < inner.length; ii++) toks.push(inner[ii]);
-            toks.push({ t: 'condclose', v: cm[3] });
+            var shift = i + cm[1].length;
+            for (var ii = 0; ii < inner.length; ii++) {
+              inner[ii].s += shift; inner[ii].e += shift;
+              toks.push(inner[ii]);
+            }
+            toks.push({ t: 'condclose', v: cm[3], s: e - cm[3].length, e: e });
             i = e; continue;
           }
-          flush(); toks.push({ t: 'comment', v: cv }); i = e; continue;
+          flush(); toks.push({ t: 'comment', v: cv, s: i, e: e }); i = e; continue;
         }
         if (src.startsWith('<![', i)) {                     // CDATA / downlevel-revealed
           var ce = src.indexOf(']>', i);
           ce = ce === -1 ? n : ce + 2;
-          flush(); toks.push({ t: 'comment', v: src.slice(i, ce), keep: true }); i = ce; continue;
+          flush(); toks.push({ t: 'comment', v: src.slice(i, ce), keep: true, s: i, e: ce }); i = ce; continue;
         }
         if (src.startsWith('<!', i)) {
           var de = src.indexOf('>', i);
           de = de === -1 ? n : de + 1;
-          flush(); toks.push({ t: 'doctype', v: src.slice(i, de) }); i = de; continue;
+          flush(); toks.push({ t: 'doctype', v: src.slice(i, de), s: i, e: de }); i = de; continue;
         }
         if (src[i + 1] === '?' || src[i + 1] === '%') {
           var tp = matchTplAt(src, i);
-          flush(); toks.push({ t: 'tpl', v: tp.v, k: tp.k }); i = tp.end; continue;
+          flush(); toks.push({ t: 'tpl', v: tp.v, k: tp.k, s: i, e: tp.end }); i = tp.end; continue;
         }
         if (src.startsWith('</', i)) {
           var cm = /^<\/\s*([a-zA-Z][\w:.\-]*)\s*>/.exec(src.slice(i));
           if (cm) {
             flush();
-            toks.push({ t: 'close', name: cm[1].toLowerCase(), rawName: cm[1] });
+            toks.push({ t: 'close', name: cm[1].toLowerCase(), rawName: cm[1],
+                        s: i, e: i + cm[0].length });
             i += cm[0].length; continue;
           }
         }
@@ -702,6 +726,8 @@ footer b{color:var(--ph); font-weight:400}
           var parsed = parseTag(src, i);
           if (parsed) {
             flush();
+            parsed.token.s = i;
+            parsed.token.e = parsed.end;
             toks.push(parsed.token);
             i = parsed.end;
             var nm = parsed.token.name;
@@ -709,24 +735,24 @@ footer b{color:var(--ph); font-weight:400}
               var re = new RegExp('</\\s*' + nm + '\\s*>', 'i');
               var mm = re.exec(src.slice(i));
               var stop = mm ? i + mm.index : n;
-              toks.push({ t: 'raw', v: src.slice(i, stop), name: nm });
+              toks.push({ t: 'raw', v: src.slice(i, stop), name: nm, s: i, e: stop });
               i = stop;
             }
             continue;
           }
         }
-        buf += c; i++; continue;
+        eat(c); i++; continue;
       }
 
       var t = matchTplAt(src, i);
       if (t) {
-        if (t.k === 'text') { buf += t.v; i = t.end; continue; }
+        if (t.k === 'text') { eat(t.v); i = t.end; continue; }
         flush();
-        toks.push({ t: 'tpl', v: t.v, k: t.k, name: t.name });
+        toks.push({ t: 'tpl', v: t.v, k: t.k, name: t.name, s: i, e: t.end });
         i = t.end; continue;
       }
 
-      buf += c; i++;
+      eat(c); i++;
     }
     flush();
     return toks;
@@ -843,14 +869,17 @@ footer b{color:var(--ph); font-weight:400}
           if (stack[s].type === 'el' && stack[s].name === tk.name) { idx = s; break; }
         }
         if (idx === -1) {
-          warnings.push({ level: 'err', fix: 'stray', msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
+          warnings.push({ level: 'err', fix: 'stray', pos: tk.s,
+            msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
           add({ type: 'stray', tok: tk });
         } else {
           for (var p = stack.length - 1; p > idx; p--) {
             if (stack[p].type === 'el') {
-              warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
+              warnings.push({ level: 'warn', fix: 'unclosed', pos: stack[p].tok.s,
+                msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
             } else {
-              warnings.push({ level: 'warn', msg: 'Незакрытый блок ' + short(stack[p].tok.v) });
+              warnings.push({ level: 'warn', pos: stack[p].tok.s,
+                msg: 'Незакрытый блок ' + short(stack[p].tok.v) });
             }
           }
           stack[idx].closed = true;
@@ -882,7 +911,8 @@ footer b{color:var(--ph); font-weight:400}
           } else {
             for (var r = stack.length - 1; r > ti; r--) {
               if (stack[r].type === 'el') {
-                warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
+                warnings.push({ level: 'warn', fix: 'unclosed', pos: stack[r].tok.s,
+                msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
               }
             }
             stack[ti].closeTok = tk;
@@ -904,9 +934,11 @@ footer b{color:var(--ph); font-weight:400}
 
     for (var f = stack.length - 1; f > 0; f--) {
       if (stack[f].type === 'el') {
-        warnings.push({ level: 'err', fix: 'unclosed', msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
+        warnings.push({ level: 'err', fix: 'unclosed', pos: stack[f].tok.s,
+          msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
       } else {
-        warnings.push({ level: 'err', msg: 'Шаблонный блок ' + short(stack[f].tok.v) + ' не закрыт' });
+        warnings.push({ level: 'err', pos: stack[f].tok.s,
+          msg: 'Шаблонный блок ' + short(stack[f].tok.v) + ' не закрыт' });
       }
     }
 
@@ -1559,27 +1591,53 @@ footer b{color:var(--ph); font-weight:400}
    * Список проблем со скобками и парностью тегов.
    * Всё, что сюда попадает, умеет чинить repair().
    */
+  /** Быстрый перевод смещения в номер строки (1-based). */
+  function lineIndex(src) {
+    var starts = [0];
+    for (var i = 0; i < src.length; i++) if (src[i] === '\n') starts.push(i + 1);
+    return function (pos) {
+      if (pos == null) return 0;
+      var lo = 0, hi = starts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
+      }
+      return lo + 1;
+    };
+  }
+
   function checkTags(src) {
     var items = [];
     var toks = tokenize(src);
+    var lineAt = lineIndex(src);
 
     toks.forEach(function (t) {
       if (t.t === 'text') {
         // «</tr» без «>» токенайзер оставляет обычным текстом
-        var m = t.v.match(BROKEN_CLOSE);
-        if (m) m.forEach(function (x) {
-          items.push({ level: 'err', msg: 'Пропущен «>»: ' + x + ' → ' + x + '>' });
-        });
+        var re = /<\/([a-zA-Z][\w:.\-]*)/g, m;
+        while ((m = re.exec(t.v))) {
+          items.push({
+            level: 'err', fix: 'bracket', pos: t.s + m.index,
+            line: lineAt(t.s + m.index),
+            msg: 'Пропущен «>»: ' + m[0] + ' → ' + m[0] + '>'
+          });
+        }
       }
       if (t.t === 'open' && t.unterminated) {
-        items.push({ level: 'err', msg: 'Пропущен «>» у <' + t.name + '>' });
+        items.push({
+          level: 'err', fix: 'bracket', pos: t.s, line: lineAt(t.s),
+          msg: 'Пропущен «>» у <' + t.name + '>'
+        });
       }
     });
 
     buildTree(toks).warnings.forEach(function (w) {
-      if (w.fix) items.push(w);
+      if (!w.fix) return;
+      w.line = lineAt(w.pos);
+      items.push(w);
     });
 
+    items.sort(function (a, b) { return (a.line || 0) - (b.line || 0); });
     return items;
   }
 
@@ -1795,24 +1853,48 @@ footer b{color:var(--ph); font-weight:400}
   paintStats();
 
   /* ---------------- gutters ---------------- */
+  var badLines = [];
+
   function paintGutter(ta, gut) {
     var n = ta.value ? ta.value.split('\n').length : 1;
     if (n > 20000) n = 20000;
-    var cached = gut.dataset.n | 0;
-    if (cached !== n) {
-      var s = '';
-      for (var i = 1; i <= n; i++) s += i + '\n';
-      gut.textContent = s;
-      gut.dataset.n = n;
+    var marks = (gut === $('gutIn') && badLines.length) ? badLines : null;
+    var key = n + '|' + (marks ? marks.join(',') : '');
+    if (gut.dataset.key !== key) {
+      var set = marks ? {} : null;
+      if (set) marks.forEach(function (l) { set[l] = 1; });
+      var out = [];
+      for (var i = 1; i <= n; i++) out.push(set && set[i] ? '<i>' + i + '</i>' : i);
+      gut.innerHTML = out.join('\n');
+      gut.dataset.key = key;
     }
     gut.scrollTop = ta.scrollTop;
   }
+
+  // Полосы под проблемными строками. Textarea прозрачна, полосы лежат под ней.
+  function paintMarks() {
+    var box = $('marksIn');
+    if (!badLines.length) { box.innerHTML = ''; return; }
+    var cs = getComputedStyle(input);
+    var lh = parseFloat(cs.lineHeight) || 20;
+    var top0 = (parseFloat(cs.paddingTop) || 0) - input.scrollTop;
+    box.style.left = $('gutIn').offsetWidth + 'px';
+    box.innerHTML = badLines.map(function (l) {
+      return '<div style="top:' + (top0 + (l - 1) * lh).toFixed(1) +
+             'px;height:' + lh.toFixed(1) + 'px"></div>';
+    }).join('');
+  }
+
   function sync(ta, gut) {
-    ta.addEventListener('scroll', function () { gut.scrollTop = ta.scrollTop; });
+    ta.addEventListener('scroll', function () {
+      gut.scrollTop = ta.scrollTop;
+      if (ta === input) paintMarks();
+    });
     ta.addEventListener('input', function () { paintGutter(ta, gut); });
   }
   sync(input, $('gutIn'));
   sync(output, $('gutOut'));
+  window.addEventListener('resize', paintMarks);
 
   function meta(text) {
     var chars = text.length;
@@ -1920,20 +2002,29 @@ footer b{color:var(--ph); font-weight:400}
 
   function scanTags() {
     var src = input.value;
-    if (!src.trim()) { paintFix(0); return; }
-    if (src.length > 2 * 1024 * 1024) { paintFix(0); return; }
+    if (!src.trim() || src.length > 2 * 1024 * 1024) { paintFix([]); return; }
     var items;
     try { items = AMEngine.checkTags(src); } catch (e) { items = []; }
-    paintFix(items.length);
+    paintFix(items);
   }
 
-  function paintFix(n) {
+  function paintFix(items) {
+    var n = items.length;
     lastScan = n;
     $('btnFix').classList.toggle('alert', n > 0);
     $('fixCount').textContent = n;
     $('btnFix').title = n
       ? 'Найдено проблем: ' + n + '. Нажмите, чтобы дописать пропущенные теги и скобки'
       : 'Проблем с тегами не найдено';
+
+    var seen = {};
+    badLines = [];
+    items.forEach(function (w) {
+      if (w.line && !seen[w.line]) { seen[w.line] = 1; badLines.push(w.line); }
+    });
+    badLines.sort(function (a, b) { return a - b; });
+    paintGutter(input, $('gutIn'));
+    paintMarks();
   }
 
   input.addEventListener('input', function () {
@@ -1994,7 +2085,7 @@ footer b{color:var(--ph); font-weight:400}
     input.value = ''; output.value = '';
     $('inMeta').textContent = meta(''); $('outMeta').textContent = '—';
     paintGutter(input, $('gutIn')); paintGutter(output, $('gutOut'));
-    paintDiag([]); paintFix(0); $('stStatus').textContent = 'буфер очищен';
+    paintDiag([]); paintFix([]); $('stStatus').textContent = 'буфер очищен';
     $('stSave').textContent = '—'; $('stMode').textContent = '—';
     input.focus();
   };
@@ -2121,7 +2212,7 @@ footer b{color:var(--ph); font-weight:400}
   })();
 
   paintGutter(input, $('gutIn'));
-  paintFix(0);
+  paintFix([]);
   input.focus();
 })();
 </script>
