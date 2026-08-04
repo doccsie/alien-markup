@@ -179,11 +179,13 @@ button:disabled{opacity:.35; cursor:not-allowed}
   0%,100%{box-shadow:0 0 0 0 transparent}
   50%{box-shadow:0 0 18px -2px var(--err), inset 0 0 12px -6px var(--err)}
 }
+/* счётчик всегда занимает своё место — иначе соседние кнопки прыгают */
 #fixCount{
-  display:none; margin-left:8px; padding:2px 7px; font-size:12px;
+  display:inline-block; margin-left:8px; padding:2px 0; font-size:12px;
+  width:3ch; text-align:center; visibility:hidden;
   background:var(--err); color:var(--bg); text-shadow:none;
 }
-#btnFix.alert #fixCount{display:inline}
+#btnFix.alert #fixCount{visibility:visible}
 .seg{display:flex; border:1px solid var(--ph-dim)}
 .seg span{border:0; border-right:1px solid var(--ph-dim); user-select:none}
 .seg span:last-child{border-right:0}
@@ -263,7 +265,13 @@ footer{
   font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--ph-dim);
   background:linear-gradient(0deg, var(--bg-2), transparent);
 }
-footer b{color:var(--ph); font-weight:400}
+/* значения фиксированной ширины — статусная строка не должна дёргаться */
+footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left}
+#stStatus{min-width:18ch}
+#stMode{min-width:13ch}
+#stSave{min-width:13ch}
+#stDiag{min-width:3ch}
+#stToday,#stTotal,#stSession{min-width:4ch}
 .cursor{display:inline-block; width:8px; height:14px; background:var(--ph);
   vertical-align:-2px; animation:blink 1.05s steps(1,end) infinite}
 @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
@@ -2012,7 +2020,7 @@ footer b{color:var(--ph); font-weight:400}
     var n = items.length;
     lastScan = n;
     $('btnFix').classList.toggle('alert', n > 0);
-    $('fixCount').textContent = n;
+    $('fixCount').textContent = n > 99 ? '99+' : n;
     $('btnFix').title = n
       ? 'Найдено проблем: ' + n + '. Нажмите, чтобы дописать пропущенные теги и скобки'
       : 'Проблем с тегами не найдено';
