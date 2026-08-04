@@ -168,6 +168,23 @@
     return null;
   }
 
+  /**
+   * Вставка действительно закрыта своим маркером, а не упёрлась в конец файла.
+   * Нужно, чтобы незакрытая «${» не проглотила остаток документа.
+   */
+  function tplComplete(t) {
+    switch (t.k) {
+      case 'php':          return /\?>$/.test(t.v);
+      case 'erb':          return /%>$/.test(t.v);
+      case 'mustache':     return /\}\}+$/.test(t.v);
+      case 'curly':        return /%\}$/.test(t.v);
+      case 'curlycomment': return /#\}$/.test(t.v);
+      case 'interp':
+      case 'atbrace':      return /\}$/.test(t.v);
+      default:             return true;
+    }
+  }
+
   function parseTag(src, i) {
     var m = /^<([a-zA-Z][\w:.\-]*)/.exec(src.slice(i));
     if (!m) return null;
@@ -209,10 +226,17 @@
         while (k < n && isWS(src[k])) k++;
         if (src[k] === '"' || src[k] === "'") {
           quote = src[k];
-          var e = src.indexOf(quote, k + 1);
-          var end = e === -1 ? n : e;
-          value = src.slice(k + 1, end);
-          k = end + 1;
+          var vstart = ++k;
+          // Внутри значения может стоять шаблонная вставка со своими кавычками:
+          // href="${Search("item").Url}" — такую вставку перешагиваем целиком,
+          // иначе значение оборвётся на первой же внутренней кавычке.
+          while (k < n && src[k] !== quote) {
+            var tv = matchTplAt(src, k);
+            if (tv && tv.end > k && tplComplete(tv)) { k = tv.end; continue; }
+            k++;
+          }
+          value = src.slice(vstart, k);
+          k = k < n ? k + 1 : n;
         } else {
           var vs = k;
           while (k < n && !isWS(src[k]) && src[k] !== '>') {
@@ -535,9 +559,8 @@
       v = v.replace(/\s+/g, ' ').trim();
     }
     if (opts && opts.unquote && v !== '' && /^[^\s"'`=<>]+$/.test(v) && !/\/$/.test(v)) return a.name + '=' + v;
-    if (v.indexOf('"') !== -1 && v.indexOf("'") === -1) q = "'";
-    else if (q === "'" && v.indexOf("'") !== -1) q = '"';
-    else if (!opts || !opts.keepQuoteStyle) q = v.indexOf('"') !== -1 ? "'" : '"';
+    // кавычки оставляем те, что выбрал автор: подмена ломает шаблонные вставки
+    // вида href="${Search("item").Url}", где внутренние кавычки — часть выражения
     return a.name + '=' + q + v + q;
   }
 

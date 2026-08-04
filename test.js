@@ -120,6 +120,14 @@ const CASES = {
    <div class="promo"><p>Скидка <b>50%</b></p></div>
 -->`,
 
+  'вложенные кавычки в шаблонной вставке': `<td style="text-align: center;">
+<center><a href="\${Products.SearchInIdentity("item").GetByValue("13823630").Url}" target="_blank" style="text-decoration: none;"><img class="mw89" src="\${Products.SearchInIdentity("item").GetByValue("13823630").CustomField.html400}" style="border: 0; max-width: 150px;" width="150" alt=""></a></center>
+</td>
+<td style="color: #1b1b1b;"><a href="\${Products.SearchInIdentity("item").GetByValue("13823630").Url}" style="color: #1b1b1b;">\${Products.SearchInIdentity("item").GetByValue("13823630").VendorName}</a></td>
+<a href="{{ url("route", {"id": 5}) }}">twig</a>
+<div data-x="<?php echo "a"; ?>">php</div>
+<span title="незакрытая \${вставка">край</span>`,
+
   'строчное содержимое не рвётся': `<table>
 <tr>
 <td style="color: #6f757e;">ООО &laquo;Меркури Мода&raquo; 14<span>30</span>82, Мос<span>ковска</span>я обл., <span style="white-space: nowrap;">г. Оди<span>нцово</span>, д. Бар</span>виха, д.&nbsp;114 <span style="white-space: nowrap;">ОГРН 11<span>45</span>03<span>20</span>0</span></td>
@@ -179,6 +187,9 @@ Object.keys(CASES).forEach(function (name) {
   check('проблем с тегами нет', E.checkTags(src).length === 0,
     E.checkTags(src).map(function (w) { return w.msg; }).join('; '));
   check('repair не трогает исправный код', E.repair(src).code === first.code);
+
+  check('атрибуты не искажены', first.code.indexOf('(" ') === -1 && first.code.indexOf(' ")') === -1,
+    'в значение атрибута вклинился пробел');
 
   const sizes = [1, 2, 3].map(function (l) { return E.minify(src, l).length; });
   check('сжатие уменьшает объём: ' + src.length + ' → ' + sizes.join(' / '),
