@@ -51,6 +51,7 @@ engine.js     исходник движка: токенайзер + формат
 favicon.svg   исходник иконки
 build.js      встраивает engine.js и favicon.svg внутрь index.html
 test.js       автотесты движка: node test.js
+test-ui.js    автотесты интерфейса: npm i jsdom && node test-ui.js
 README.md     этот файл
 ```
 
@@ -114,7 +115,7 @@ cd путь/к/проекту
 
 # 2. инициализация
 git init
-git add index.html engine.js favicon.svg build.js test.js README.md
+git add index.html engine.js favicon.svg build.js test.js test-ui.js README.md
 git commit -m "Alien Markup: первый релиз"
 git branch -M main
 
