@@ -18,6 +18,7 @@
   --err:#ff5f56;
   --warn:#ffb648;
   --glow:6px; --scan:.22; --vig:.55; --gridsize:34px;
+  --code:11px;
 }
 
 /* ALIEN — фосфорный ЭЛТ */
@@ -166,6 +167,23 @@ button:active{transform:translateY(1px)}
 button.primary{border-color:var(--ph); box-shadow:inset 0 0 0 1px rgba(0,0,0,.4), 0 0 14px -6px var(--ph)}
 button.primary:hover{background:var(--ph); color:var(--bg); text-shadow:none}
 button:disabled{opacity:.35; cursor:not-allowed}
+
+/* кнопка починки: тревожное свечение, когда есть что чинить */
+#btnFix{transition:border-color .2s, color .2s, box-shadow .2s}
+#btnFix.alert{
+  border-color:var(--err); color:var(--err);
+  animation:alarm 1.5s ease-in-out infinite;
+}
+#btnFix.alert:hover{background:var(--err); color:var(--bg); text-shadow:none; animation:none}
+@keyframes alarm{
+  0%,100%{box-shadow:0 0 0 0 transparent}
+  50%{box-shadow:0 0 18px -2px var(--err), inset 0 0 12px -6px var(--err)}
+}
+#fixCount{
+  display:none; margin-left:7px; padding:1px 6px; font-size:10px;
+  background:var(--err); color:var(--bg); text-shadow:none;
+}
+#btnFix.alert #fixCount{display:inline}
 .seg{display:flex; border:1px solid var(--ph-dim)}
 .seg span{border:0; border-right:1px solid var(--ph-dim); user-select:none}
 .seg span:last-child{border-right:0}
@@ -190,15 +208,15 @@ main{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:0}
 .pane-head .meta{margin-left:auto; font-size:10px; letter-spacing:.14em}
 .editor{flex:1; display:flex; min-height:0; position:relative}
 .gutter{
-  padding:10px 8px 10px 12px; text-align:right; color:var(--ph-dim);
-  font-size:12.5px; line-height:1.55; user-select:none; overflow:hidden;
+  padding:8px 7px 8px 10px; text-align:right; color:var(--ph-dim);
+  font-size:var(--code); line-height:1.45; user-select:none; overflow:hidden;
   border-right:1px solid var(--ph-ghost); background:rgba(0,0,0,.25);
-  min-width:46px; white-space:pre; text-shadow:none;
+  min-width:40px; white-space:pre; text-shadow:none;
 }
 textarea{
-  flex:1; width:100%; resize:none; border:0; outline:0; padding:10px 14px;
+  flex:1; width:100%; resize:none; border:0; outline:0; padding:8px 11px;
   background:transparent; color:var(--ph); font-family:inherit;
-  font-size:12.5px; line-height:1.55; white-space:pre; overflow:auto;
+  font-size:var(--code); line-height:1.45; white-space:pre; overflow:auto;
   caret-color:var(--ph); tab-size:2;
 }
 textarea::placeholder{color:var(--ph-dim); opacity:.7}
@@ -223,6 +241,7 @@ textarea::-webkit-scrollbar-thumb:hover{background:var(--ph-dim)}
 #diag .row{display:flex; gap:8px; padding:2px 0}
 #diag .row .tag{min-width:52px; font-size:9.5px; letter-spacing:.16em; opacity:.9}
 .lvl-err{color:var(--err)} .lvl-warn{color:var(--warn)} .lvl-info{color:var(--ph-dim)}
+.lvl-fix{color:var(--ph)}
 
 /* --- status bar --- */
 footer{
@@ -291,6 +310,9 @@ footer b{color:var(--ph); font-weight:400}
   <div class="toolbar">
     <button class="primary" id="btnFormat">▶ форматировать</button>
     <button id="btnMinify">▼ сжать</button>
+    <button id="btnFix" title="Дописать пропущенные теги и скобки">
+      ⚕ починить теги<span id="fixCount">0</span>
+    </button>
     <div class="seg" id="levelSeg" role="tablist" title="Степень сжатия">
       <span role="tab" data-lv="1">L1 safe</span>
       <span role="tab" data-lv="2" aria-selected="true">L2 balanced</span>
@@ -533,11 +555,16 @@ footer b{color:var(--ph); font-weight:400}
     var self = false;
     var n = src.length;
 
+    var unterminated = false;
+
     while (j < n) {
       while (j < n && isWS(src[j])) j++;
-      if (j >= n) break;
+      if (j >= n) { unterminated = true; break; }
       if (src[j] === '>') { j++; break; }
       if (src[j] === '/' && src[j + 1] === '>') { self = true; j += 2; break; }
+      // забыли «>»: дальше начинается следующий тег — обрываем этот,
+      // иначе разбор проглотил бы весь остаток документа
+      if (src[j] === '<' && /[a-zA-Z\/!]/.test(src[j + 1] || '')) { unterminated = true; break; }
 
       var tpl = matchTplAt(src, j);
       if (tpl) { attrs.push({ raw: tpl.v, tpl: true }); j = tpl.end; continue; }
@@ -591,7 +618,8 @@ footer b{color:var(--ph); font-weight:400}
         attrs: attrs,
         self: self || VOID.has(lower),
         slash: self,                 // в исходнике действительно был « />»
-        void: VOID.has(lower)
+        void: VOID.has(lower),
+        unterminated: unterminated
       },
       end: j
     };
@@ -791,12 +819,12 @@ footer b{color:var(--ph); font-weight:400}
           if (stack[s].type === 'el' && stack[s].name === tk.name) { idx = s; break; }
         }
         if (idx === -1) {
-          warnings.push({ level: 'err', msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
+          warnings.push({ level: 'err', fix: 'stray', msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
           add({ type: 'stray', tok: tk });
         } else {
           for (var p = stack.length - 1; p > idx; p--) {
             if (stack[p].type === 'el') {
-              warnings.push({ level: 'warn', msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
+              warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
             } else {
               warnings.push({ level: 'warn', msg: 'Незакрытый блок ' + short(stack[p].tok.v) });
             }
@@ -830,7 +858,7 @@ footer b{color:var(--ph); font-weight:400}
           } else {
             for (var r = stack.length - 1; r > ti; r--) {
               if (stack[r].type === 'el') {
-                warnings.push({ level: 'warn', msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
+                warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
               }
             }
             stack[ti].closeTok = tk;
@@ -852,7 +880,7 @@ footer b{color:var(--ph); font-weight:400}
 
     for (var f = stack.length - 1; f > 0; f--) {
       if (stack[f].type === 'el') {
-        warnings.push({ level: 'err', msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
+        warnings.push({ level: 'err', fix: 'unclosed', msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
       } else {
         warnings.push({ level: 'err', msg: 'Шаблонный блок ' + short(stack[f].tok.v) + ' не закрыт' });
       }
@@ -1075,6 +1103,15 @@ footer b{color:var(--ph); font-weight:400}
     var built = buildTree(toks);
     var lines = [];
     var protectedChunks = [];
+    var fixes = [];
+
+    // Закрывающий тег элемента. В режиме починки дописывает отсутствующий.
+    function endTag(node) {
+      if (node.closed) return closeTag(node, opts);
+      if (!opts.fix) return '';
+      fixes.push({ level: 'fix', msg: 'Дописан </' + node.name + '>' });
+      return '</' + tagName(node.tok, opts) + '>';
+    }
 
     function pad(d) { return opts.indent.repeat(Math.max(0, d)); }
     function push(d, s) { lines.push(pad(d) + s); }
@@ -1185,6 +1222,10 @@ footer b{color:var(--ph); font-weight:400}
           break;
 
         case 'stray':
+          if (opts.fix) {
+            fixes.push({ level: 'fix', msg: 'Удалён лишний </' + node.tok.name + '>' });
+            return;
+          }
           push(d, '</' + node.tok.name + '>');
           break;
 
@@ -1240,16 +1281,17 @@ footer b{color:var(--ph); font-weight:400}
             return !(c.type === 'text' && !c.tok.v.trim());
           });
 
-          if (!kids.length) { push(d, open + closeTag(node, opts)); return; }
+          if (!kids.length) { push(d, open + endTag(node)); return; }
 
           if (canInline(node)) {
-            push(d, open + inlineRender(node.children, opts, true) + closeTag(node, opts));
+            push(d, open + inlineRender(node.children, opts, true) + endTag(node));
             return;
           }
 
           push(d, open);
           renderChildren(node, d + 1);
-          if (node.closed) push(d, closeTag(node, opts));
+          var ct = endTag(node);
+          if (ct) push(d, ct);
           break;
         }
       }
@@ -1291,7 +1333,14 @@ footer b{color:var(--ph); font-weight:400}
     out = out.replace(new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'), function (_, n) {
       return protectedChunks[Number(n)];
     });
-    return { code: out, warnings: built.warnings };
+    if (opts.fix) {
+      toks.forEach(function (t) {
+        if (t.t === 'open' && t.unterminated) {
+          fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
+        }
+      });
+    }
+    return { code: out, warnings: built.warnings, fixes: fixes };
   }
 
   function squishTpl(v) {
@@ -1477,11 +1526,93 @@ footer b{color:var(--ph); font-weight:400}
     return w;
   }
 
+  /* ---------------------------------------------------------- *
+   * 10. Проверка и починка тегов
+   * ---------------------------------------------------------- */
+
+  var BROKEN_CLOSE = /<\/([a-zA-Z][\w:.\-]*)/g;
+
+  /**
+   * Список проблем со скобками и парностью тегов.
+   * Всё, что сюда попадает, умеет чинить repair().
+   */
+  function checkTags(src) {
+    var items = [];
+    var toks = tokenize(src);
+
+    toks.forEach(function (t) {
+      if (t.t === 'text') {
+        // «</tr» без «>» токенайзер оставляет обычным текстом
+        var m = t.v.match(BROKEN_CLOSE);
+        if (m) m.forEach(function (x) {
+          items.push({ level: 'err', msg: 'Пропущен «>»: ' + x + ' → ' + x + '>' });
+        });
+      }
+      if (t.t === 'open' && t.unterminated) {
+        items.push({ level: 'err', msg: 'Пропущен «>» у <' + t.name + '>' });
+      }
+    });
+
+    buildTree(toks).warnings.forEach(function (w) {
+      if (w.fix) items.push(w);
+    });
+
+    return items;
+  }
+
+  /**
+   * Чинит скобки и парность тегов, затем форматирует.
+   * Возвращает { code, fixes, warnings }.
+   */
+  function repair(src, options) {
+    var fixes = [];
+    var toks = tokenize(src);
+    var rebuilt = '';
+    var changed = false;
+
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+      if (t.t === 'text' && /<\/[a-zA-Z]/.test(t.v)) {
+        rebuilt += t.v.replace(/<\/([a-zA-Z][\w:.\-]*)/g, function (m, name) {
+          fixes.push({ level: 'fix', msg: 'Дописан «>»: </' + name + '>' });
+          changed = true;
+          return '</' + name + '>';
+        });
+        continue;
+      }
+      if (t.t === 'open' && t.unterminated) {
+        fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
+        changed = true;
+      }
+      rebuilt += tokenText(t, options);
+    }
+
+    var res = beautify(changed ? rebuilt : src,
+      Object.assign({}, options || {}, { fix: true }));
+
+    return {
+      code: res.code,
+      fixes: fixes.concat(res.fixes || []),
+      warnings: res.warnings
+    };
+  }
+
+  function tokenText(t, opts) {
+    switch (t.t) {
+      case 'open':  return openTag(t, opts || {});
+      case 'close': return '</' + (t.rawName || t.name) + '>';
+      case 'raw':   return t.v;
+      default:      return t.v || '';
+    }
+  }
+
   return {
     tokenize: tokenize,
     beautify: beautify,
     minify: minify,
     analyze: analyze,
+    checkTags: checkTags,
+    repair: repair,
     VOID: VOID,
     INLINE: INLINE
   };
@@ -1683,8 +1814,9 @@ footer b{color:var(--ph); font-weight:400}
     $('stDiag').textContent = warnings.length;
     $('ledErr').classList.toggle('off', !warnings.length);
     if (!warnings.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
+    var TAGS = { err: 'ошибка', warn: 'внимание', fix: 'исправлено', info: 'заметка' };
     var html = warnings.slice(0, 60).map(function (w) {
-      var tag = w.level === 'err' ? 'ошибка' : (w.level === 'warn' ? 'внимание' : 'заметка');
+      var tag = TAGS[w.level] || 'заметка';
       return '<div class="row lvl-' + w.level + '"><span class="tag">[' + tag + ']</span><span>' +
              esc(w.msg) + '</span></div>';
     }).join('');
@@ -1760,6 +1892,62 @@ footer b{color:var(--ph); font-weight:400}
   $('btnFormat').onclick = function () { run('format'); };
   $('btnMinify').onclick = function () { run('minify'); };
 
+  /* ---------------- проверка и починка тегов ---------------- */
+  var scanTimer, lastScan = -1;
+
+  function scanTags() {
+    var src = input.value;
+    if (!src.trim()) { paintFix(0); return; }
+    if (src.length > 2 * 1024 * 1024) { paintFix(0); return; }
+    var items;
+    try { items = AMEngine.checkTags(src); } catch (e) { items = []; }
+    paintFix(items.length);
+  }
+
+  function paintFix(n) {
+    lastScan = n;
+    $('btnFix').classList.toggle('alert', n > 0);
+    $('fixCount').textContent = n;
+    $('btnFix').title = n
+      ? 'Найдено проблем: ' + n + '. Нажмите, чтобы дописать пропущенные теги и скобки'
+      : 'Проблем с тегами не найдено';
+  }
+
+  input.addEventListener('input', function () {
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(scanTags, 350);
+  });
+
+  $('btnFix').onclick = function () {
+    var src = input.value;
+    if (!src.trim()) { toast('буфер ввода пуст'); return; }
+    if (lastScan === 0) { toast('чинить нечего — теги в порядке'); return; }
+
+    var t0 = performance.now();
+    var res;
+    try {
+      res = AMEngine.repair(src, { indent: indentString() });
+    } catch (e) {
+      $('stStatus').textContent = 'сбой починки';
+      toast('ошибка: ' + e.message);
+      return;
+    }
+    var dt = (performance.now() - t0).toFixed(1);
+
+    output.value = res.code;
+    paintGutter(output, $('gutOut'));
+    $('outMeta').textContent = meta(res.code);
+    $('stMode').textContent = 'починка + формат';
+    $('stSave').textContent = '—';
+    $('stStatus').textContent = 'исправлено ' + res.fixes.length + ' за ' + dt + ' мс';
+    // показываем, что сделано, плюс то, что чинить не умеем
+    paintDiag(dedupeWarn(res.fixes.concat(
+      res.warnings.filter(function (w) { return !w.fix; })
+    )));
+    bump();
+    toast(res.fixes.length ? 'исправлено: ' + res.fixes.length : 'нечего исправлять');
+  };
+
   $('levelSeg').addEventListener('click', function (e) {
     var t = e.target.closest('[data-lv]');
     if (!t) return;
@@ -1775,6 +1963,7 @@ footer b{color:var(--ph); font-weight:400}
     input.value = output.value;
     $('inMeta').textContent = meta(input.value);
     paintGutter(input, $('gutIn'));
+    scanTags();
     toast('результат перенесён в ввод');
   };
 
@@ -1782,7 +1971,7 @@ footer b{color:var(--ph); font-weight:400}
     input.value = ''; output.value = '';
     $('inMeta').textContent = meta(''); $('outMeta').textContent = '—';
     paintGutter(input, $('gutIn')); paintGutter(output, $('gutOut'));
-    paintDiag([]); $('stStatus').textContent = 'буфер очищен';
+    paintDiag([]); paintFix(0); $('stStatus').textContent = 'буфер очищен';
     $('stSave').textContent = '—'; $('stMode').textContent = '—';
     input.focus();
   };
@@ -1829,6 +2018,7 @@ footer b{color:var(--ph); font-weight:400}
       $('inMeta').textContent = meta(input.value);
       paintGutter(input, $('gutIn'));
       $('stStatus').textContent = 'загружен ' + f.name;
+      scanTags();
       toast('загружен ' + f.name);
     };
     fr.readAsText(f);
@@ -1840,6 +2030,7 @@ footer b{color:var(--ph); font-weight:400}
     if (mod && e.key === 'Enter') { e.preventDefault(); run('format'); }
     if (mod && e.shiftKey && (e.key === 'M' || e.key === 'm')) { e.preventDefault(); run('minify'); }
     if (mod && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); $('btnCopy').click(); }
+    if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); $('btnFix').click(); }
     if (mod && e.shiftKey && (e.key === 'T' || e.key === 't')) {
       e.preventDefault();
       var i = THEMES.map(function (t) { return t.id; }).indexOf(themeId);
@@ -1874,6 +2065,7 @@ footer b{color:var(--ph); font-weight:400}
     input.value = SAMPLE;
     $('inMeta').textContent = meta(input.value);
     paintGutter(input, $('gutIn'));
+    scanTags();
     run('format');
   };
 
@@ -1890,6 +2082,7 @@ footer b{color:var(--ph); font-weight:400}
     'CTRL+ENTER .... форматировать',
     'CTRL+SHIFT+M .. сжать',
     'CTRL+SHIFT+C .. копировать результат',
+    'CTRL+SHIFT+F .. починить теги',
     'CTRL+SHIFT+T .. следующее оформление',
     '',
     'ОЖИДАНИЕ ВВОДА ▮'
@@ -1905,6 +2098,7 @@ footer b{color:var(--ph); font-weight:400}
   })();
 
   paintGutter(input, $('gutIn'));
+  paintFix(0);
   input.focus();
 })();
 </script>

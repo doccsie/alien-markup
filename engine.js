@@ -177,11 +177,16 @@
     var self = false;
     var n = src.length;
 
+    var unterminated = false;
+
     while (j < n) {
       while (j < n && isWS(src[j])) j++;
-      if (j >= n) break;
+      if (j >= n) { unterminated = true; break; }
       if (src[j] === '>') { j++; break; }
       if (src[j] === '/' && src[j + 1] === '>') { self = true; j += 2; break; }
+      // забыли «>»: дальше начинается следующий тег — обрываем этот,
+      // иначе разбор проглотил бы весь остаток документа
+      if (src[j] === '<' && /[a-zA-Z\/!]/.test(src[j + 1] || '')) { unterminated = true; break; }
 
       var tpl = matchTplAt(src, j);
       if (tpl) { attrs.push({ raw: tpl.v, tpl: true }); j = tpl.end; continue; }
@@ -235,7 +240,8 @@
         attrs: attrs,
         self: self || VOID.has(lower),
         slash: self,                 // в исходнике действительно был « />»
-        void: VOID.has(lower)
+        void: VOID.has(lower),
+        unterminated: unterminated
       },
       end: j
     };
@@ -435,12 +441,12 @@
           if (stack[s].type === 'el' && stack[s].name === tk.name) { idx = s; break; }
         }
         if (idx === -1) {
-          warnings.push({ level: 'err', msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
+          warnings.push({ level: 'err', fix: 'stray', msg: 'Закрывающий тег без пары: </' + tk.name + '>' });
           add({ type: 'stray', tok: tk });
         } else {
           for (var p = stack.length - 1; p > idx; p--) {
             if (stack[p].type === 'el') {
-              warnings.push({ level: 'warn', msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
+              warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Незакрытый тег <' + stack[p].name + '> внутри <' + tk.name + '>' });
             } else {
               warnings.push({ level: 'warn', msg: 'Незакрытый блок ' + short(stack[p].tok.v) });
             }
@@ -474,7 +480,7 @@
           } else {
             for (var r = stack.length - 1; r > ti; r--) {
               if (stack[r].type === 'el') {
-                warnings.push({ level: 'warn', msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
+                warnings.push({ level: 'warn', fix: 'unclosed', msg: 'Тег <' + stack[r].name + '> не закрыт внутри шаблонного блока' });
               }
             }
             stack[ti].closeTok = tk;
@@ -496,7 +502,7 @@
 
     for (var f = stack.length - 1; f > 0; f--) {
       if (stack[f].type === 'el') {
-        warnings.push({ level: 'err', msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
+        warnings.push({ level: 'err', fix: 'unclosed', msg: 'Тег <' + stack[f].name + '> так и не закрыт' });
       } else {
         warnings.push({ level: 'err', msg: 'Шаблонный блок ' + short(stack[f].tok.v) + ' не закрыт' });
       }
@@ -719,6 +725,15 @@
     var built = buildTree(toks);
     var lines = [];
     var protectedChunks = [];
+    var fixes = [];
+
+    // Закрывающий тег элемента. В режиме починки дописывает отсутствующий.
+    function endTag(node) {
+      if (node.closed) return closeTag(node, opts);
+      if (!opts.fix) return '';
+      fixes.push({ level: 'fix', msg: 'Дописан </' + node.name + '>' });
+      return '</' + tagName(node.tok, opts) + '>';
+    }
 
     function pad(d) { return opts.indent.repeat(Math.max(0, d)); }
     function push(d, s) { lines.push(pad(d) + s); }
@@ -829,6 +844,10 @@
           break;
 
         case 'stray':
+          if (opts.fix) {
+            fixes.push({ level: 'fix', msg: 'Удалён лишний </' + node.tok.name + '>' });
+            return;
+          }
           push(d, '</' + node.tok.name + '>');
           break;
 
@@ -884,16 +903,17 @@
             return !(c.type === 'text' && !c.tok.v.trim());
           });
 
-          if (!kids.length) { push(d, open + closeTag(node, opts)); return; }
+          if (!kids.length) { push(d, open + endTag(node)); return; }
 
           if (canInline(node)) {
-            push(d, open + inlineRender(node.children, opts, true) + closeTag(node, opts));
+            push(d, open + inlineRender(node.children, opts, true) + endTag(node));
             return;
           }
 
           push(d, open);
           renderChildren(node, d + 1);
-          if (node.closed) push(d, closeTag(node, opts));
+          var ct = endTag(node);
+          if (ct) push(d, ct);
           break;
         }
       }
@@ -935,7 +955,14 @@
     out = out.replace(new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'), function (_, n) {
       return protectedChunks[Number(n)];
     });
-    return { code: out, warnings: built.warnings };
+    if (opts.fix) {
+      toks.forEach(function (t) {
+        if (t.t === 'open' && t.unterminated) {
+          fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
+        }
+      });
+    }
+    return { code: out, warnings: built.warnings, fixes: fixes };
   }
 
   function squishTpl(v) {
@@ -1121,11 +1148,93 @@
     return w;
   }
 
+  /* ---------------------------------------------------------- *
+   * 10. Проверка и починка тегов
+   * ---------------------------------------------------------- */
+
+  var BROKEN_CLOSE = /<\/([a-zA-Z][\w:.\-]*)/g;
+
+  /**
+   * Список проблем со скобками и парностью тегов.
+   * Всё, что сюда попадает, умеет чинить repair().
+   */
+  function checkTags(src) {
+    var items = [];
+    var toks = tokenize(src);
+
+    toks.forEach(function (t) {
+      if (t.t === 'text') {
+        // «</tr» без «>» токенайзер оставляет обычным текстом
+        var m = t.v.match(BROKEN_CLOSE);
+        if (m) m.forEach(function (x) {
+          items.push({ level: 'err', msg: 'Пропущен «>»: ' + x + ' → ' + x + '>' });
+        });
+      }
+      if (t.t === 'open' && t.unterminated) {
+        items.push({ level: 'err', msg: 'Пропущен «>» у <' + t.name + '>' });
+      }
+    });
+
+    buildTree(toks).warnings.forEach(function (w) {
+      if (w.fix) items.push(w);
+    });
+
+    return items;
+  }
+
+  /**
+   * Чинит скобки и парность тегов, затем форматирует.
+   * Возвращает { code, fixes, warnings }.
+   */
+  function repair(src, options) {
+    var fixes = [];
+    var toks = tokenize(src);
+    var rebuilt = '';
+    var changed = false;
+
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+      if (t.t === 'text' && /<\/[a-zA-Z]/.test(t.v)) {
+        rebuilt += t.v.replace(/<\/([a-zA-Z][\w:.\-]*)/g, function (m, name) {
+          fixes.push({ level: 'fix', msg: 'Дописан «>»: </' + name + '>' });
+          changed = true;
+          return '</' + name + '>';
+        });
+        continue;
+      }
+      if (t.t === 'open' && t.unterminated) {
+        fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
+        changed = true;
+      }
+      rebuilt += tokenText(t, options);
+    }
+
+    var res = beautify(changed ? rebuilt : src,
+      Object.assign({}, options || {}, { fix: true }));
+
+    return {
+      code: res.code,
+      fixes: fixes.concat(res.fixes || []),
+      warnings: res.warnings
+    };
+  }
+
+  function tokenText(t, opts) {
+    switch (t.t) {
+      case 'open':  return openTag(t, opts || {});
+      case 'close': return '</' + (t.rawName || t.name) + '>';
+      case 'raw':   return t.v;
+      default:      return t.v || '';
+    }
+  }
+
   return {
     tokenize: tokenize,
     beautify: beautify,
     minify: minify,
     analyze: analyze,
+    checkTags: checkTags,
+    repair: repair,
     VOID: VOID,
     INLINE: INLINE
   };
