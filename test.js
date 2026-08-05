@@ -197,6 +197,32 @@ Object.keys(CASES).forEach(function (name) {
   console.log('');
 });
 
+console.log('типографика:');
+const TYPO_SRC = '<p>Компания  "Меркури"   работает с 2010-2024 годов . Цена -- 10 000 руб, ' +
+  'вес 5 кг, скидка 20 %.</p>\n<p>Товар № 5, размер 10 x 20 см (c) 2024</p>\n' +
+  '<p>А. С. Пушкин и  М. Ю. Лермонтов</p>\n<code>если a - b, то "код" не трогаем</code>\n' +
+  '<pre>  тоже   не   трогаем  "тут"</pre>\n<p>Скидка {{ discount }} на товар, у нас в магазине</p>\n' +
+  '<p>Уже&nbsp;неразрывный и&nbsp;ещё</p>\n<a href="/x?a=1&amp;b=2">ссылка на  сайт</a>';
+
+const typo = E.typography(TYPO_SRC);
+const skeleton = function (s) { return E.minify(s, 3).replace(/>[^<]*/g, '>'); };
+
+check('кавычки-ёлочки', typo.code.indexOf('«Меркури»') !== -1);
+check('двойной дефис → тире с неразрывным', typo.code.indexOf('Цена&nbsp;—') !== -1);
+check('диапазон через короткое тире', typo.code.indexOf('2010–2024') !== -1);
+check('разряды числа не рвутся', typo.code.indexOf('10&nbsp;000') !== -1);
+check('предлог не отрывается', typo.code.indexOf('с&nbsp;2010') !== -1);
+check('единица измерения не склеена со следующим словом', typo.code.indexOf('см&nbsp;©') === -1);
+check('номер и знаки', typo.code.indexOf('№&nbsp;5') !== -1 && typo.code.indexOf('10×20') !== -1);
+check('инициалы', typo.code.indexOf('А.&nbsp;С.&nbsp;Пушкин') !== -1);
+check('внутри <code> не тронуто', typo.code.indexOf('если a - b, то "код"') !== -1);
+check('внутри <pre> не тронуто', typo.code.indexOf('  тоже   не   трогаем  "тут"') !== -1);
+check('шаблонная вставка цела', typo.code.indexOf('{{ discount }}') !== -1);
+check('сущности целы', typo.code.indexOf('&amp;b=2') !== -1);
+check('разметка не изменилась', skeleton(TYPO_SRC) === skeleton(typo.code));
+check('идемпотентность', E.typography(typo.code).code === typo.code);
+console.log('');
+
 console.log('битая верстка:');
 const found = E.checkTags(BROKEN);
 check('проблемы найдены (' + found.length + ')', found.length === 6,

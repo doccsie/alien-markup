@@ -1190,7 +1190,109 @@
   }
 
   /* ---------------------------------------------------------- *
-   * 10. Проверка и починка тегов
+   * 10. Типографика
+   * ---------------------------------------------------------- */
+
+  // Внутри этих тегов текст не трогаем — там важен каждый символ
+  var NO_TYPO = new Set(['code', 'kbd', 'samp', 'var', 'tt', 'pre', 'textarea', 'script', 'style']);
+
+  // Предлоги, союзы, частицы и местоимения, которые нельзя оставлять в конце
+  // строки. Список явный: правило «любое слово из 1-2 букв» цепляло бы
+  // и единицы измерения — «20 см ©».
+  var SHORT_WORDS = 'а|и|в|к|о|с|у|я|б|ж|во|ко|со|об|обо|на|за|из|от|до|по|про|для|' +
+    'не|ни|но|да|же|ли|бы|то|уж|аж|под|над|при|без|вне|как|что|чем|где|уже|или|' +
+    'мы|ты|вы|он|их|им|её|ее|ей|его|наш|мой|все|всё|это|эта|тот|та|те';
+
+  var MASK = '\u0001';   // заглушка для HTML-сущностей
+  var NB = '\u0002';     // неразрывный пробел до подстановки
+
+  /**
+   * Русская типографика для текстовых узлов.
+   * Возвращает { code, count } — новый исходник и число замен.
+   */
+  function typography(src, options) {
+    var opts = options || {};
+    var nbsp = opts.nbsp === 'char' ? '\u00A0' : '&nbsp;';
+    var toks = tokenize(src);
+    var out = '', last = 0, skip = 0;
+    var st = { n: 0, depth: 0 };
+
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i];
+
+      if (t.t === 'open' && NO_TYPO.has(t.name) && !t.self) { skip++; continue; }
+      if (t.t === 'close' && NO_TYPO.has(t.name) && skip) { skip--; continue; }
+      if (t.t !== 'text' || skip) continue;
+      if (!/\S/.test(t.v)) continue;
+
+      var res = typoText(t.v, nbsp, st);
+      if (res === t.v) continue;
+      out += src.slice(last, t.s) + res;
+      last = t.e;
+    }
+    out += src.slice(last);
+    return { code: out, count: st.n };
+  }
+
+  function typoText(v, nbsp, st) {
+    var ent = [];
+
+    // сущности прячем целиком: правила не должны в них лезть
+    v = v.replace(/&(?:[a-zA-Z][a-zA-Z0-9]{1,10}|#\d{1,5}|#x[0-9a-fA-F]{1,5});/g, function (m) {
+      ent.push(m);
+      return MASK + (ent.length - 1) + MASK;
+    });
+
+    function apply(re, to) {
+      var m = v.match(re);
+      if (!m) return;
+      st.n += m.length;
+      v = v.replace(re, to);
+    }
+
+    apply(/[ \t]{2,}/g, ' ');                       // двойные пробелы
+    apply(/[ \t]+([,.!?;:])/g, '$1');               // пробел перед знаком препинания
+    apply(/\.{3,}/g, '…');                          // многоточие
+    apply(/\(c\)/gi, '©');
+    apply(/\(r\)/gi, '®');
+    apply(/\(tm\)/gi, '™');
+    apply(/\+-/g, '±');
+    apply(/(\d)\s*[xх]\s*(\d)/g, '$1×$2');          // 10 x 20 → 10 × 20
+
+    // кавычки: внешние «ёлочки», вложенные „лапки“
+    apply(new RegExp('(^|[\\s' + NB + '(\\[{—–-])"', 'g'), function (m, p) {
+      st.depth++;
+      return p + (st.depth > 1 ? '„' : '«');
+    });
+    apply(/"/g, function () {
+      var ch = st.depth > 1 ? '“' : '»';
+      if (st.depth) st.depth--;
+      return ch;
+    });
+
+    apply(/(^|[\s])-{1,2}([\s])/g, '$1—$2');        // дефис между словами → тире
+    apply(new RegExp('([^\\s' + NB + '])[ \\t]+—', 'g'), '$1' + NB + '—');
+    apply(/(\d{1,4})-(\d{1,4})(?![\d-])/g, '$1–$2');       // диапазон через короткое тире
+
+    apply(/([№§])[ \t]+/g, '$1' + NB);
+    apply(/(\d)[ \t](?=\d{3}(?!\d))/g, '$1' + NB);         // 100 000
+    apply(/(\d)[ \t]+(?=[а-яёa-z%°])/gi, '$1' + NB);       // 10 кг, 5 %
+    apply(/([А-ЯЁ]\.)[ \t]*([А-ЯЁ]\.)[ \t]*(?=[А-ЯЁ])/g, '$1' + NB + '$2' + NB);
+
+    // Предлоги и союзы не отрываем от следующего слова. Список явный:
+    // «любое слово из 1-2 букв» цепляло бы и единицы измерения — «20 см ©».
+    var short = new RegExp(
+      '(^|[\\s' + NB + '(«„])(' + SHORT_WORDS + ')[ \\t]+', 'gi');
+    for (var pass = 0; pass < 3; pass++) apply(short, '$1$2' + NB);
+
+    v = v.split(NB).join(nbsp);
+    return v.replace(new RegExp(MASK + '(\\d+)' + MASK, 'g'), function (m, k) {
+      return ent[Number(k)];
+    });
+  }
+
+  /* ---------------------------------------------------------- *
+   * 11. Проверка и починка тегов
    * ---------------------------------------------------------- */
 
   var BROKEN_CLOSE = /<\/([a-zA-Z][\w:.\-]*)/g;
@@ -1302,6 +1404,7 @@
     analyze: analyze,
     checkTags: checkTags,
     repair: repair,
+    typography: typography,
     VOID: VOID,
     INLINE: INLINE
   };
