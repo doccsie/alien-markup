@@ -14,6 +14,9 @@
    ============================================================ */
 :root{
   --font:"Berkeley Mono","JetBrains Mono","IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --toon:"Comic Sans MS","Chalkboard SE","Comic Neue",var(--font);
+  --edge:#000;
   --pad:14px;
   --err:#ff5f56;
   --warn:#ffb648;
@@ -71,6 +74,117 @@ html[data-theme="monolith"]{
 }
 html[data-theme="monolith"] #app{animation:none}
 html[data-theme="monolith"] #crt::before{mix-blend-mode:normal}
+
+/* --- спокойные --- */
+/* BONE — тёплая бумага */
+html[data-theme="bone"]{
+  --bg:#f7f6f2; --bg-2:#fffdf9; --panel:#fffdf9;
+  --ph:#262420; --ph-dim:#b3ada0; --ph-ghost:#e9e6de;
+  --a2:#b4593c; --led:#b4593c; --grid:rgba(38,36,32,.035);
+  --glow:0px; --scan:0; --vig:.05;
+}
+/* FOG — холодная студийная */
+html[data-theme="fog"]{
+  --bg:#f3f6f9; --bg-2:#ffffff; --panel:#ffffff;
+  --ph:#1a2027; --ph-dim:#aab4c0; --ph-ghost:#e3e9f0;
+  --a2:#3f5fd7; --led:#3f5fd7; --grid:rgba(26,32,39,.03);
+  --glow:0px; --scan:0; --vig:.04;
+}
+/* GRAPHITE — мягкая тёмная */
+html[data-theme="graphite"]{
+  --bg:#15181c; --bg-2:#1b1f24; --panel:#191c21;
+  --ph:#d9dee5; --ph-dim:#5c656f; --ph-ghost:#252b32;
+  --a2:#7fb3ff; --led:#7fb3ff; --grid:rgba(217,222,229,.028);
+  --glow:0px; --scan:.05; --vig:.25;
+}
+/* --- мультяшные --- */
+/* PORTAL — кислотная зелень на фиолетовом */
+html[data-theme="portal"]{
+  --bg:#120826; --bg-2:#1a0f33; --panel:#160b2c;
+  --ph:#a8e04a; --ph-dim:#5a7a2e; --ph-ghost:#241442;
+  --a2:#2ee6d6; --led:#a8e04a; --grid:rgba(168,224,74,.06);
+  --edge:#050a02; --glow:12px; --scan:.2; --vig:.55;
+}
+/* SLIME — светлый комикс с чёрными контурами */
+html[data-theme="slime"]{
+  --bg:#fdf7e4; --bg-2:#fffdf3; --panel:#fffdf3;
+  --ph:#141414; --ph-dim:#2a2a24; --ph-ghost:#efe7cd;
+  --a2:#7ec636; --led:#7ec636; --grid:rgba(20,20,20,.05);
+  --edge:#141414; --glow:0px; --scan:0; --vig:.06;
+  --err:#d62f86; --warn:#e8a020;
+}
+/* STATIC — фуксия с лаймом и помехами */
+html[data-theme="static"]{
+  --bg:#0d0217; --bg-2:#16042a; --panel:#120321;
+  --ph:#ff63d1; --ph-dim:#7a2e63; --ph-ghost:#26093f;
+  --a2:#c7ff2e; --led:#ff63d1; --grid:rgba(255,99,209,.05);
+  --edge:#000000; --glow:10px; --scan:.26; --vig:.6;
+}
+
+/* --- пластика: спокойные темы --- */
+html[data-skin="calm"] #app{animation:none}
+html[data-skin="calm"] #crt::before{mix-blend-mode:normal}
+html[data-skin="calm"] header,
+html[data-skin="calm"] .toolbar,
+html[data-skin="calm"] .pane-head,
+html[data-skin="calm"] footer,
+html[data-skin="calm"] .menu,
+html[data-skin="calm"] #toast{font-family:var(--ui); letter-spacing:.02em}
+html[data-skin="calm"] button,
+html[data-skin="calm"] select,
+html[data-skin="calm"] .seg,
+html[data-skin="calm"] .tgl,
+html[data-skin="calm"] .tgl .box{border-radius:8px}
+html[data-skin="calm"] .seg span:first-child{border-radius:7px 0 0 7px}
+html[data-skin="calm"] .seg span:last-child{border-radius:0 7px 7px 0}
+html[data-skin="calm"] button:hover,
+html[data-skin="calm"] .seg span:hover{box-shadow:none; background:var(--ph-ghost)}
+html[data-skin="calm"] button.primary{box-shadow:none}
+html[data-skin="calm"] .menu{border-radius:10px; border-color:var(--ph-ghost); box-shadow:0 10px 28px rgba(0,0,0,.14)}
+html[data-skin="calm"] .pane-head .dot{box-shadow:none}
+html[data-skin="calm"] .led b{box-shadow:none; animation:none}
+
+/* --- пластика: мультяшные темы --- */
+html[data-skin="toon"] .brand h1{font-family:var(--toon); letter-spacing:.02em}
+html[data-skin="toon"] button,
+html[data-skin="toon"] select,
+html[data-skin="toon"] .seg,
+html[data-skin="toon"] .tgl{border-width:2px; border-radius:10px}
+html[data-skin="toon"] .tgl .box{border-width:2px; border-radius:5px}
+html[data-skin="toon"] button{box-shadow:2px 2px 0 var(--edge)}
+html[data-skin="toon"] button:hover{box-shadow:3px 3px 0 var(--edge)}
+html[data-skin="toon"] button:active{transform:translate(2px,2px); box-shadow:none}
+html[data-skin="toon"] .menu{border-width:2px; border-radius:12px; box-shadow:4px 4px 0 var(--edge)}
+html[data-theme="slime"] #app{animation:none}
+html[data-theme="slime"] #crt::before{mix-blend-mode:normal}
+
+/* портальная воронка (тема portal) */
+#portal{
+  position:fixed; inset:0; z-index:97; pointer-events:none; opacity:0;
+  transition:opacity .6s linear;
+  background:conic-gradient(from 0deg at 50% 50%,
+    rgba(168,224,74,.30), rgba(46,230,214,.06) 25%,
+    rgba(168,224,74,.30) 50%, rgba(46,230,214,.06) 75%, rgba(168,224,74,.30));
+  -webkit-mask:radial-gradient(circle at 50% 50%, transparent 0 14%, #000 22% 36%, transparent 48%);
+  mask:radial-gradient(circle at 50% 50%, transparent 0 14%, #000 22% 36%, transparent 48%);
+}
+html[data-theme="portal"] #portal{opacity:.9; animation:swirl 30s linear infinite}
+@keyframes swirl{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* помехи (тема static) */
+@keyframes glitch{
+  0%,90%,100%{transform:translate(0,0)}
+  91%{transform:translate(-2px,1px)}
+  92%{transform:translate(2px,-1px)}
+  93%{transform:translate(-1px,0)}
+  94%{transform:translate(0,0)}
+}
+html[data-theme="static"] #app{animation:glitch 6s infinite steps(1,end)}
+@media (prefers-reduced-motion: reduce){
+  html[data-theme="portal"] #portal{animation:none}
+  html[data-theme="static"] #app{animation:none}
+}
+
 
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -140,6 +254,7 @@ header{
   position:absolute; top:calc(100% + 8px); right:0; z-index:120; min-width:252px;
   background:var(--bg-2); border:1px solid var(--ph); padding:4px;
   box-shadow:0 0 26px -8px var(--ph); display:none;
+  max-height:min(66vh, 430px); overflow:auto;
 }
 .menu.open{display:block}
 .menu button{
@@ -168,24 +283,6 @@ button.primary{border-color:var(--ph); box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)
 button.primary:hover{background:var(--ph); color:var(--bg); text-shadow:none}
 button:disabled{opacity:.35; cursor:not-allowed}
 
-/* кнопка починки: тревожное свечение, когда есть что чинить */
-#btnFix{transition:border-color .2s, color .2s, box-shadow .2s}
-#btnFix.alert{
-  border-color:var(--err); color:var(--err);
-  animation:alarm 1.5s ease-in-out infinite;
-}
-#btnFix.alert:hover{background:var(--err); color:var(--bg); text-shadow:none; animation:none}
-@keyframes alarm{
-  0%,100%{box-shadow:0 0 0 0 transparent}
-  50%{box-shadow:0 0 18px -2px var(--err), inset 0 0 12px -6px var(--err)}
-}
-/* счётчик всегда занимает своё место — иначе соседние кнопки прыгают */
-#fixCount{
-  display:inline-block; margin-left:8px; padding:2px 0; font-size:12px;
-  width:3ch; text-align:center; visibility:hidden;
-  background:var(--err); color:var(--bg); text-shadow:none;
-}
-#btnFix.alert #fixCount{visibility:visible}
 .seg{display:flex; border:1px solid var(--ph-dim)}
 .seg span{border:0; border-right:1px solid var(--ph-dim); user-select:none}
 .seg span:last-child{border-right:0}
@@ -238,18 +335,6 @@ main{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:0}
   font-size:var(--code); line-height:1.45; user-select:none; overflow:hidden;
   border-right:1px solid var(--ph-ghost); background:rgba(0,0,0,.25);
   min-width:52px; white-space:pre; text-shadow:none;
-}
-/* подсветка проблемных строк */
-.gutter i{
-  font-style:normal; color:var(--err); font-weight:400;
-  text-shadow:0 0 9px var(--err);
-}
-.marks{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0}
-.marks div{
-  position:absolute; left:0; right:0;
-  background:color-mix(in srgb, var(--err) 15%, transparent);
-  border-left:2px solid var(--err);
-  box-shadow:inset 0 0 22px -12px var(--err);
 }
 textarea{
   position:relative; z-index:1;
@@ -329,6 +414,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
 <body>
 <canvas id="rain"></canvas>
 <div id="crt"></div>
+<div id="portal" aria-hidden="true"></div>
 <div id="drop">▚ отпустите файл — загрузим в буфер ▚</div>
 <div id="toast"></div>
 
@@ -355,9 +441,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   <div class="toolbar">
     <button class="primary" id="btnFormat">▶ форматировать</button>
     <button id="btnMinify">▼ сжать</button>
-    <button id="btnFix" title="Дописать пропущенные теги и скобки">
-      ⚕ починить теги<span id="fixCount">0</span>
-    </button>
     <div class="seg" id="levelSeg" role="tablist" title="Степень сжатия">
       <span role="tab" data-lv="1">L1 safe</span>
       <span role="tab" data-lv="2" aria-selected="true">L2 balanced</span>
@@ -390,7 +473,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
       </div>
       <div class="editor">
         <div class="gutter" id="gutIn">1</div>
-        <div class="marks" id="marksIn" aria-hidden="true"></div>
         <textarea id="input" spellcheck="false" autocomplete="off"
           placeholder="Вставьте HTML сюда, либо перетащите файл в окно…"></textarea>
       </div>
@@ -1193,14 +1275,10 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     var built = buildTree(toks);
     var lines = [];
     var protectedChunks = [];
-    var fixes = [];
 
-    // Закрывающий тег элемента. В режиме починки дописывает отсутствующий.
+    // Закрывающий тег элемента. Если его нет в исходнике — ничего не дописываем.
     function endTag(node) {
-      if (node.closed) return closeTag(node, opts);
-      if (!opts.fix) return '';
-      fixes.push({ level: 'fix', msg: 'Дописан </' + node.name + '>' });
-      return '</' + tagName(node.tok, opts) + '>';
+      return node.closed ? closeTag(node, opts) : '';
     }
 
     function pad(d) { return opts.indent.repeat(Math.max(0, d)); }
@@ -1312,10 +1390,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
           break;
 
         case 'stray':
-          if (opts.fix) {
-            fixes.push({ level: 'fix', msg: 'Удалён лишний </' + node.tok.name + '>' });
-            return;
-          }
           push(d, '</' + node.tok.name + '>');
           break;
 
@@ -1423,14 +1497,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     out = out.replace(new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'), function (_, n) {
       return protectedChunks[Number(n)];
     });
-    if (opts.fix) {
-      toks.forEach(function (t) {
-        if (t.t === 'open' && t.unterminated) {
-          fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
-        }
-      });
-    }
-    return { code: out, warnings: built.warnings, fixes: fixes };
+    return { code: out, warnings: built.warnings };
   }
 
   function squishTpl(v) {
@@ -1718,119 +1785,11 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     });
   }
 
-  /* ---------------------------------------------------------- *
-   * 11. Проверка и починка тегов
-   * ---------------------------------------------------------- */
-
-  var BROKEN_CLOSE = /<\/([a-zA-Z][\w:.\-]*)/g;
-
-  /**
-   * Список проблем со скобками и парностью тегов.
-   * Всё, что сюда попадает, умеет чинить repair().
-   */
-  /** Быстрый перевод смещения в номер строки (1-based). */
-  function lineIndex(src) {
-    var starts = [0];
-    for (var i = 0; i < src.length; i++) if (src[i] === '\n') starts.push(i + 1);
-    return function (pos) {
-      if (pos == null) return 0;
-      var lo = 0, hi = starts.length - 1;
-      while (lo < hi) {
-        var mid = (lo + hi + 1) >> 1;
-        if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
-      }
-      return lo + 1;
-    };
-  }
-
-  function checkTags(src) {
-    var items = [];
-    var toks = tokenize(src);
-    var lineAt = lineIndex(src);
-
-    toks.forEach(function (t) {
-      if (t.t === 'text') {
-        // «</tr» без «>» токенайзер оставляет обычным текстом
-        var re = /<\/([a-zA-Z][\w:.\-]*)/g, m;
-        while ((m = re.exec(t.v))) {
-          items.push({
-            level: 'err', fix: 'bracket', pos: t.s + m.index,
-            line: lineAt(t.s + m.index),
-            msg: 'Пропущен «>»: ' + m[0] + ' → ' + m[0] + '>'
-          });
-        }
-      }
-      if (t.t === 'open' && t.unterminated) {
-        items.push({
-          level: 'err', fix: 'bracket', pos: t.s, line: lineAt(t.s),
-          msg: 'Пропущен «>» у <' + t.name + '>'
-        });
-      }
-    });
-
-    buildTree(toks).warnings.forEach(function (w) {
-      if (!w.fix) return;
-      w.line = lineAt(w.pos);
-      items.push(w);
-    });
-
-    items.sort(function (a, b) { return (a.line || 0) - (b.line || 0); });
-    return items;
-  }
-
-  /**
-   * Чинит скобки и парность тегов, затем форматирует.
-   * Возвращает { code, fixes, warnings }.
-   */
-  function repair(src, options) {
-    var fixes = [];
-    var toks = tokenize(src);
-    var rebuilt = '';
-    var changed = false;
-
-    for (var i = 0; i < toks.length; i++) {
-      var t = toks[i];
-      if (t.t === 'text' && /<\/[a-zA-Z]/.test(t.v)) {
-        rebuilt += t.v.replace(/<\/([a-zA-Z][\w:.\-]*)/g, function (m, name) {
-          fixes.push({ level: 'fix', msg: 'Дописан «>»: </' + name + '>' });
-          changed = true;
-          return '</' + name + '>';
-        });
-        continue;
-      }
-      if (t.t === 'open' && t.unterminated) {
-        fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
-        changed = true;
-      }
-      rebuilt += tokenText(t, options);
-    }
-
-    var res = beautify(changed ? rebuilt : src,
-      Object.assign({}, options || {}, { fix: true }));
-
-    return {
-      code: res.code,
-      fixes: fixes.concat(res.fixes || []),
-      warnings: res.warnings
-    };
-  }
-
-  function tokenText(t, opts) {
-    switch (t.t) {
-      case 'open':  return openTag(t, opts || {});
-      case 'close': return '</' + (t.rawName || t.name) + '>';
-      case 'raw':   return t.v;
-      default:      return t.v || '';
-    }
-  }
-
   return {
     tokenize: tokenize,
     beautify: beautify,
     minify: minify,
     analyze: analyze,
-    checkTags: checkTags,
-    repair: repair,
     typography: typography,
     VOID: VOID,
     INLINE: INLINE
@@ -1854,7 +1813,13 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     { id: 'replicant', word: 'Replicant', sub: 'неоновый нуар',   ink: '#22d3ee', bg: '#0a0714' },
     { id: 'grid',      word: 'Grid',      sub: 'световая сетка',  ink: '#00e5ff', bg: '#000306' },
     { id: 'zion',      word: 'Zion',      sub: 'цифровой дождь',  ink: '#00ff41', bg: '#000600' },
-    { id: 'monolith',  word: 'Monolith',  sub: 'дневная',         ink: '#16150f', bg: '#eceae4' }
+    { id: 'monolith',  word: 'Monolith',  sub: 'дневная',         ink: '#16150f', bg: '#eceae4' },
+    { id: 'bone',      word: 'Bone',      sub: 'тёплая бумага',   ink: '#b4593c', bg: '#f7f6f2', skin: 'calm' },
+    { id: 'fog',       word: 'Fog',       sub: 'холодная студия', ink: '#3f5fd7', bg: '#f3f6f9', skin: 'calm' },
+    { id: 'graphite',  word: 'Graphite',  sub: 'мягкая тёмная',   ink: '#7fb3ff', bg: '#15181c', skin: 'calm' },
+    { id: 'portal',    word: 'Portal',    sub: 'зелёная воронка', ink: '#a8e04a', bg: '#120826', skin: 'toon' },
+    { id: 'slime',     word: 'Slime',     sub: 'светлый комикс',  ink: '#7ec636', bg: '#fdf7e4', skin: 'toon' },
+    { id: 'static',    word: 'Static',    sub: 'фуксия и помехи', ink: '#ff63d1', bg: '#0d0217', skin: 'toon' }
   ];
 
   var themeId = localStorage.getItem('am.theme') || 'alien';
@@ -1878,6 +1843,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   function applyTheme(silent) {
     var t = current();
     document.documentElement.dataset.theme = t.id;
+    document.documentElement.dataset.skin = t.skin || 'crt';
     localStorage.setItem('am.theme', t.id);
     $('brandName').textContent = t.word + ' Markup';
     $('themeLabel').textContent = t.id;
@@ -1991,48 +1957,25 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   paintStats();
 
   /* ---------------- gutters ---------------- */
-  var badLines = [];
-
   function paintGutter(ta, gut) {
     var n = ta.value ? ta.value.split('\n').length : 1;
     if (n > 20000) n = 20000;
-    var marks = (gut === $('gutIn') && badLines.length) ? badLines : null;
-    var key = n + '|' + (marks ? marks.join(',') : '');
+    var key = String(n);
     if (gut.dataset.key !== key) {
-      var set = marks ? {} : null;
-      if (set) marks.forEach(function (l) { set[l] = 1; });
       var out = [];
-      for (var i = 1; i <= n; i++) out.push(set && set[i] ? '<i>' + i + '</i>' : i);
+      for (var i = 1; i <= n; i++) out.push(i);
       gut.innerHTML = out.join('\n');
       gut.dataset.key = key;
     }
     gut.scrollTop = ta.scrollTop;
   }
 
-  // Полосы под проблемными строками. Textarea прозрачна, полосы лежат под ней.
-  function paintMarks() {
-    var box = $('marksIn');
-    if (!badLines.length) { box.innerHTML = ''; return; }
-    var cs = getComputedStyle(input);
-    var lh = parseFloat(cs.lineHeight) || 20;
-    var top0 = (parseFloat(cs.paddingTop) || 0) - input.scrollTop;
-    box.style.left = $('gutIn').offsetWidth + 'px';
-    box.innerHTML = badLines.map(function (l) {
-      return '<div style="top:' + (top0 + (l - 1) * lh).toFixed(1) +
-             'px;height:' + lh.toFixed(1) + 'px"></div>';
-    }).join('');
-  }
-
   function sync(ta, gut) {
-    ta.addEventListener('scroll', function () {
-      gut.scrollTop = ta.scrollTop;
-      if (ta === input) paintMarks();
-    });
+    ta.addEventListener('scroll', function () { gut.scrollTop = ta.scrollTop; });
     ta.addEventListener('input', function () { paintGutter(ta, gut); });
   }
   sync(input, $('gutIn'));
   sync(output, $('gutOut'));
-  window.addEventListener('resize', paintMarks);
 
   function meta(text) {
     var chars = text.length;
@@ -2161,75 +2104,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   $('btnFormat').onclick = function () { run('format'); };
   $('btnMinify').onclick = function () { run('minify'); };
 
-  /* ---------------- проверка и починка тегов ---------------- */
-  var scanTimer, lastScan = -1;
-
-  function scanTags() {
-    var src = input.value;
-    if (!src.trim() || src.length > 2 * 1024 * 1024) { paintFix([]); return; }
-    var items;
-    try { items = AMEngine.checkTags(src); } catch (e) { items = []; }
-    paintFix(items);
-  }
-
-  function paintFix(items) {
-    var n = items.length;
-    lastScan = n;
-    $('btnFix').classList.toggle('alert', n > 0);
-    $('fixCount').textContent = n > 99 ? '99+' : n;
-    $('btnFix').title = n
-      ? 'Найдено проблем: ' + n + '. Нажмите, чтобы дописать пропущенные теги и скобки'
-      : 'Проблем с тегами не найдено';
-
-    var seen = {};
-    badLines = [];
-    items.forEach(function (w) {
-      if (w.line && !seen[w.line]) { seen[w.line] = 1; badLines.push(w.line); }
-    });
-    badLines.sort(function (a, b) { return a - b; });
-    paintGutter(input, $('gutIn'));
-    paintMarks();
-  }
-
-  input.addEventListener('input', function () {
-    clearTimeout(scanTimer);
-    scanTimer = setTimeout(scanTags, 350);
-  });
-
-  $('btnFix').onclick = function () {
-    var src = input.value;
-    if (!src.trim()) { toast('буфер ввода пуст'); return; }
-    if (lastScan === 0) { toast('чинить нечего — теги в порядке'); return; }
-
-    lastMode = null;
-    var stat = { typo: 0 };
-    src = preprocess(src, stat);
-    var t0 = performance.now();
-    var res;
-    try {
-      res = AMEngine.repair(src, { indent: indentString() });
-    } catch (e) {
-      $('stStatus').textContent = 'сбой починки';
-      toast('ошибка: ' + e.message);
-      return;
-    }
-    var dt = (performance.now() - t0).toFixed(1);
-
-    output.value = res.code;
-    paintGutter(output, $('gutOut'));
-    $('outMeta').textContent = meta(res.code);
-    $('stMode').textContent = 'починка + формат' + (typoOn ? ' + типо' : '');
-    $('stSave').textContent = '—';
-    $('stStatus').textContent = 'исправлено ' + res.fixes.length + ' за ' + dt + ' мс' +
-      (stat.typo ? ' · типографика: ' + stat.typo : '');
-    // показываем, что сделано, плюс то, что чинить не умеем
-    paintDiag(dedupeWarn(res.fixes.concat(
-      res.warnings.filter(function (w) { return !w.fix; })
-    )));
-    bump();
-    toast(res.fixes.length ? 'исправлено: ' + res.fixes.length : 'нечего исправлять');
-  };
-
   $('levelSeg').addEventListener('click', function (e) {
     var t = e.target.closest('[data-lv]');
     if (!t) return;
@@ -2245,7 +2119,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     input.value = output.value;
     $('inMeta').textContent = meta(input.value);
     paintGutter(input, $('gutIn'));
-    scanTags();
     toast('результат перенесён в ввод');
   };
 
@@ -2253,7 +2126,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     input.value = ''; output.value = '';
     $('inMeta').textContent = meta(''); $('outMeta').textContent = '—';
     paintGutter(input, $('gutIn')); paintGutter(output, $('gutOut'));
-    paintDiag([]); paintFix([]); $('stStatus').textContent = 'буфер очищен';
+    paintDiag([]); $('stStatus').textContent = 'буфер очищен';
     $('stSave').textContent = '—'; $('stMode').textContent = '—';
     input.focus();
   };
@@ -2300,7 +2173,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
       $('inMeta').textContent = meta(input.value);
       paintGutter(input, $('gutIn'));
       $('stStatus').textContent = 'загружен ' + f.name;
-      scanTags();
       toast('загружен ' + f.name);
     };
     fr.readAsText(f);
@@ -2312,7 +2184,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     if (mod && e.key === 'Enter') { e.preventDefault(); run('format'); }
     if (mod && e.shiftKey && (e.key === 'M' || e.key === 'm')) { e.preventDefault(); run('minify'); }
     if (mod && e.shiftKey && (e.key === 'C' || e.key === 'c')) { e.preventDefault(); $('btnCopy').click(); }
-    if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); $('btnFix').click(); }
     if (mod && e.shiftKey && (e.key === 'T' || e.key === 't')) {
       e.preventDefault();
       var i = THEMES.map(function (t) { return t.id; }).indexOf(themeId);
@@ -2347,7 +2218,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     input.value = SAMPLE;
     $('inMeta').textContent = meta(input.value);
     paintGutter(input, $('gutIn'));
-    scanTags();
     run('format');
   };
 
@@ -2364,7 +2234,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     'CTRL+ENTER .... форматировать',
     'CTRL+SHIFT+M .. сжать',
     'CTRL+SHIFT+C .. копировать результат',
-    'CTRL+SHIFT+F .. починить теги',
     'CTRL+SHIFT+T .. следующее оформление',
     '',
     'ОЖИДАНИЕ ВВОДА ▮'
@@ -2380,7 +2249,6 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   })();
 
   paintGutter(input, $('gutIn'));
-  paintFix([]);
   input.focus();
 })();
 </script>
