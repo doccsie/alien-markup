@@ -670,6 +670,95 @@
   };
 
   /**
+   * Директива шаблонизатора — управляющая конструкция, которой место
+   * на отдельной строке: @{set …}, @{if …}, <?php … ?>, {% for … %}.
+   * Подстановки значений (${x}, {{ y }}) считаются частью текста
+   * и остаются внутри строки.
+   */
+  function isDirective(node) {
+    if (node.type === 'tpl' || node.type === 'tplmid') return true;
+    if (node.type !== 'tplleaf') return false;
+    var k = node.tok.k;
+    return k !== 'interp' && k !== 'mustache';
+  }
+
+  /**
+   * Прогон строчных узлов, разложенный на строки по директивам.
+   * Разрыв ставится только там, где в исходнике уже был пробел:
+   * перенос строки в HTML равен пробелу, поэтому «текст@{if …}»
+   * и «@{end if}@{end for}» разрывать нельзя — отрисовка изменится.
+   */
+  function runToLines(run, opts) {
+    var out = [];
+    var cur = '';
+
+    function flush() {
+      var t = cur.trim();
+      if (t) out.push(t);
+      cur = '';
+    }
+
+    for (var i = 0; i < run.length; i++) {
+      var c = run[i];
+      var piece = c.type === 'text'
+        ? c.tok.v.replace(/\s+/g, ' ')
+        : inlineRender([c], opts);
+
+      if (!isDirective(c)) { cur += piece; continue; }
+
+      if (cur === '' || /\s$/.test(cur)) flush();
+      cur += piece;
+
+      var nxt = run[i + 1];
+      if (!nxt || (nxt.type === 'text' && /^\s/.test(nxt.tok.v))) flush();
+    }
+
+    flush();
+    return out;
+  }
+
+  function endsWS(n) { return !!n && n.type === 'text' && /\s$/.test(n.tok.v); }
+  function startsWS(n) { return !!n && n.type === 'text' && /^\s/.test(n.tok.v); }
+
+  /**
+   * Блок разворачивается на строки, если хотя бы у одной его границы
+   * в исходнике есть пробел. Границы без пробела склеиваются обратно
+   * при выводе — перенос строки равен пробелу, и «</span>@{end if}»
+   * разрывать нельзя.
+   */
+  function tplBreakable(node) {
+    var ch = node.children;
+    if (!ch.length) return false;
+    if (startsWS(ch[0])) return true;
+    if (node.closeTok && endsWS(ch[ch.length - 1])) return true;
+    for (var i = 0; i < ch.length; i++) {
+      if (ch[i].type !== 'tplmid') continue;
+      if (endsWS(ch[i - 1]) || startsWS(ch[i + 1])) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Помечает границы шаблонных блоков, у которых пробела не было:
+   * такие директивы выводятся приклеенными к соседней строке.
+   */
+  function markGlue(node) {
+    var ch = node.children || [];
+    for (var i = 0; i < ch.length; i++) {
+      var c = ch[i];
+      if (c.type === 'tplmid') {
+        c.glueL = !endsWS(ch[i - 1]);
+        c.glueR = !startsWS(ch[i + 1]);
+      }
+      markGlue(c);
+    }
+    if (node.type === 'tpl' && ch.length) {
+      node.glueOpen = !startsWS(ch[0]);
+      node.glueClose = !!node.closeTok && !endsWS(ch[ch.length - 1]);
+    }
+  }
+
+  /**
    * Узел, который можно склеить в общую строку: текст, интерполяция
    * и строчные теги, целиком состоящие из такого же содержимого.
    *
@@ -684,9 +773,13 @@
       if (!node.closeTok) return false;
       // многострочная вставка (обычно <?php … ?>) остаётся блоком
       if (node.tok.v.indexOf('\n') !== -1 || node.closeTok.v.indexOf('\n') !== -1) return false;
+      // блок с пробелами по границам раскладывается по строкам
+      if (tplBreakable(node)) return false;
       for (var k = 0; k < node.children.length; k++) {
         var ch = node.children[k];
         if (ch.type === 'tplmid') continue;
+        // вложенная управляющая конструкция разворачивает блок в строки
+        if (isDirective(ch)) return false;
         if (!isInlineRenderable(ch)) return false;
       }
       return true;
@@ -701,7 +794,7 @@
     return true;
   }
 
-  function canInline(node) {
+  function canInline(node, opts) {
     if (node.type !== 'el') return false;
     if (RAW_TEXT.has(node.name) || PRE_TEXT.has(node.name)) return false;
     for (var i = 0; i < node.children.length; i++) {
@@ -709,7 +802,7 @@
       if (c.type === 'text' && !c.tok.v.trim()) continue;
       if (!isInlineRenderable(c)) return false;
     }
-    return true;
+    return runToLines(node.children, opts).length < 2;
   }
 
   /**
@@ -764,20 +857,28 @@
     var opts = Object.assign({}, DEFAULTS, options || {});
     var toks = tokenize(src);
     var built = buildTree(toks);
+    markGlue(built.root);
     var lines = [];
     var protectedChunks = [];
-    var fixes = [];
 
-    // Закрывающий тег элемента. В режиме починки дописывает отсутствующий.
+    // Закрывающий тег элемента. Если его нет в исходнике — ничего не дописываем.
     function endTag(node) {
-      if (node.closed) return closeTag(node, opts);
-      if (!opts.fix) return '';
-      fixes.push({ level: 'fix', msg: 'Дописан </' + node.name + '>' });
-      return '</' + tagName(node.tok, opts) + '>';
+      return node.closed ? closeTag(node, opts) : '';
     }
 
     function pad(d) { return opts.indent.repeat(Math.max(0, d)); }
-    function push(d, s) { lines.push(pad(d) + s); }
+
+    // Следующая строка приклеивается к предыдущей: так директива,
+    // стоявшая в исходнике без пробела, не получает его при выводе.
+    var glueNext = false;
+    function glue(s) {
+      if (!lines.length) { lines.push(s); return; }
+      lines[lines.length - 1] = lines[lines.length - 1].replace(/\s+$/, '') + s;
+    }
+    function push(d, s) {
+      if (glueNext) { glueNext = false; glue(s); return; }
+      lines.push(pad(d) + s);
+    }
 
     // Многострочная шаблонная вставка: первая строка на своём уровне,
     // продолжение — с отступом, чтобы ничего не прилипало к левому краю.
@@ -885,10 +986,6 @@
           break;
 
         case 'stray':
-          if (opts.fix) {
-            fixes.push({ level: 'fix', msg: 'Удалён лишний </' + node.tok.name + '>' });
-            return;
-          }
           push(d, '</' + node.tok.name + '>');
           break;
 
@@ -896,14 +993,33 @@
           pushTpl(d, node.tok);
           break;
 
-        case 'tplmid':
-          pushTpl(d - 1, node.tok);
+        case 'tplmid': {
+          var midV = squishTpl(node.tok.v);
+          if (node.glueL && midV.indexOf('\n') === -1 && lines.length) glue(midV);
+          else pushTpl(d - 1, node.tok);
+          if (node.glueR) glueNext = true;
           break;
+        }
 
         case 'tpl': {
-          pushTpl(d, node.tok);
+          var kids = node.children;
+          if (!kids.length) {
+            pushTpl(d, node.tok);
+            if (node.closeTok) glueNext = true;
+          } else {
+            pushTpl(d, node.tok);
+            if (node.glueOpen) glueNext = true;
+          }
           renderChildren(node, d + 1);
-          if (node.closeTok) pushTpl(d, node.closeTok);
+          if (node.closeTok) {
+            var closeV = squishTpl(node.closeTok.v);
+            if (node.glueClose && closeV.indexOf('\n') === -1 && lines.length) {
+              glueNext = false;
+              glue(closeV);
+            } else {
+              pushTpl(d, node.closeTok);
+            }
+          }
           break;
         }
 
@@ -946,7 +1062,7 @@
 
           if (!kids.length) { push(d, open + endTag(node)); return; }
 
-          if (canInline(node)) {
+          if (canInline(node, opts)) {
             push(d, open + inlineRender(node.children, opts, true) + endTag(node));
             return;
           }
@@ -968,8 +1084,8 @@
 
       function flushRun() {
         if (!run.length) return;
-        var s = inlineRender(run, opts, true).trim();
-        if (s) push(d, s);
+        var parts = runToLines(run, opts);
+        if (parts.length) parts.forEach(function (line) { push(d, line); });
         else if (opts.keepBlankLines && lines.length && lines[lines.length - 1] !== '') {
           var nl = 0;
           run.forEach(function (c) {
@@ -996,14 +1112,7 @@
     out = out.replace(new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'), function (_, n) {
       return protectedChunks[Number(n)];
     });
-    if (opts.fix) {
-      toks.forEach(function (t) {
-        if (t.t === 'open' && t.unterminated) {
-          fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
-        }
-      });
-    }
-    return { code: out, warnings: built.warnings, fixes: fixes };
+    return { code: out, warnings: built.warnings };
   }
 
   function squishTpl(v) {
@@ -1291,119 +1400,11 @@
     });
   }
 
-  /* ---------------------------------------------------------- *
-   * 11. Проверка и починка тегов
-   * ---------------------------------------------------------- */
-
-  var BROKEN_CLOSE = /<\/([a-zA-Z][\w:.\-]*)/g;
-
-  /**
-   * Список проблем со скобками и парностью тегов.
-   * Всё, что сюда попадает, умеет чинить repair().
-   */
-  /** Быстрый перевод смещения в номер строки (1-based). */
-  function lineIndex(src) {
-    var starts = [0];
-    for (var i = 0; i < src.length; i++) if (src[i] === '\n') starts.push(i + 1);
-    return function (pos) {
-      if (pos == null) return 0;
-      var lo = 0, hi = starts.length - 1;
-      while (lo < hi) {
-        var mid = (lo + hi + 1) >> 1;
-        if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
-      }
-      return lo + 1;
-    };
-  }
-
-  function checkTags(src) {
-    var items = [];
-    var toks = tokenize(src);
-    var lineAt = lineIndex(src);
-
-    toks.forEach(function (t) {
-      if (t.t === 'text') {
-        // «</tr» без «>» токенайзер оставляет обычным текстом
-        var re = /<\/([a-zA-Z][\w:.\-]*)/g, m;
-        while ((m = re.exec(t.v))) {
-          items.push({
-            level: 'err', fix: 'bracket', pos: t.s + m.index,
-            line: lineAt(t.s + m.index),
-            msg: 'Пропущен «>»: ' + m[0] + ' → ' + m[0] + '>'
-          });
-        }
-      }
-      if (t.t === 'open' && t.unterminated) {
-        items.push({
-          level: 'err', fix: 'bracket', pos: t.s, line: lineAt(t.s),
-          msg: 'Пропущен «>» у <' + t.name + '>'
-        });
-      }
-    });
-
-    buildTree(toks).warnings.forEach(function (w) {
-      if (!w.fix) return;
-      w.line = lineAt(w.pos);
-      items.push(w);
-    });
-
-    items.sort(function (a, b) { return (a.line || 0) - (b.line || 0); });
-    return items;
-  }
-
-  /**
-   * Чинит скобки и парность тегов, затем форматирует.
-   * Возвращает { code, fixes, warnings }.
-   */
-  function repair(src, options) {
-    var fixes = [];
-    var toks = tokenize(src);
-    var rebuilt = '';
-    var changed = false;
-
-    for (var i = 0; i < toks.length; i++) {
-      var t = toks[i];
-      if (t.t === 'text' && /<\/[a-zA-Z]/.test(t.v)) {
-        rebuilt += t.v.replace(/<\/([a-zA-Z][\w:.\-]*)/g, function (m, name) {
-          fixes.push({ level: 'fix', msg: 'Дописан «>»: </' + name + '>' });
-          changed = true;
-          return '</' + name + '>';
-        });
-        continue;
-      }
-      if (t.t === 'open' && t.unterminated) {
-        fixes.push({ level: 'fix', msg: 'Дописан «>» у <' + t.name + '>' });
-        changed = true;
-      }
-      rebuilt += tokenText(t, options);
-    }
-
-    var res = beautify(changed ? rebuilt : src,
-      Object.assign({}, options || {}, { fix: true }));
-
-    return {
-      code: res.code,
-      fixes: fixes.concat(res.fixes || []),
-      warnings: res.warnings
-    };
-  }
-
-  function tokenText(t, opts) {
-    switch (t.t) {
-      case 'open':  return openTag(t, opts || {});
-      case 'close': return '</' + (t.rawName || t.name) + '>';
-      case 'raw':   return t.v;
-      default:      return t.v || '';
-    }
-  }
-
   return {
     tokenize: tokenize,
     beautify: beautify,
     minify: minify,
     analyze: analyze,
-    checkTags: checkTags,
-    repair: repair,
     typography: typography,
     VOID: VOID,
     INLINE: INLINE

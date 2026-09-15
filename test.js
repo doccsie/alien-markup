@@ -3,11 +3,10 @@
  *  ALIEN MARKUP — test.js
  *  Прогон движка по набору верстки. Запуск: node test.js
  *
- *  Проверяются три инварианта:
+ *  Проверяются два инварианта:
  *   1. идемпотентность  — повторное форматирование ничего не меняет;
  *   2. сохранность      — сжатие исходника и сжатие отформатированного
- *                         совпадают побайтово, значит отрисовка та же;
- *   3. починка          — repair() устраняет все найденные проблемы.
+ *                         совпадают побайтово, значит отрисовка та же.
  * ============================================================= */
 'use strict';
 
@@ -128,6 +127,11 @@ const CASES = {
 <div data-x="<?php echo "a"; ?>">php</div>
 <span title="незакрытая \${вставка">край</span>`,
 
+  'директивы шаблонизатора построчно': `<td>
+@{set counter = 0} @{if Recipient.Sex.IsMale} @{for item in Recipient.GetProductList("L").Take(5)} @{if counter = 0} @{set brand1 = item.Product.VendorName} @{end if} @{end for} @{else} @{set counter = 1} @{end if} @{if counter = 2} Последние поступления \${brand1} и\&nbsp;не\&nbsp;только @{else} <span>нет</span>@{end if}
+</td>
+<p>{% if x %}5{% else %}6{% endif %} и \${inline} внутри текста</p>`,
+
   'строчное содержимое не рвётся': `<table>
 <tr>
 <td style="color: #6f757e;">ООО &laquo;Меркури Мода&raquo; 14<span>30</span>82, Мос<span>ковска</span>я обл., <span style="white-space: nowrap;">г. Оди<span>нцово</span>, д. Бар</span>виха, д.&nbsp;114 <span style="white-space: nowrap;">ОГРН 11<span>45</span>03<span>20</span>0</span></td>
@@ -137,22 +141,6 @@ const CASES = {
 </tr>
 </table>`
 };
-
-const BROKEN = `<table>
-<tr>
-<td class="a">первый</td>
-<td class="b">второй
-</tr
-<tr>
-<td>третий</td>
-</span>
-<td class="c"
-<span>четвёртый</span>
-</td>
-</tr>
-</table>
-<div><p>абзац без закрытия
-</div>`;
 
 let failed = 0;
 
@@ -184,10 +172,6 @@ Object.keys(CASES).forEach(function (name) {
   console.log(name + ':');
   check('идемпотентность', first.code === second.code, diff(first.code, second.code));
   check('отрисовка не изменилась', m1 === m2, diff(m1, m2));
-  check('проблем с тегами нет', E.checkTags(src).length === 0,
-    E.checkTags(src).map(function (w) { return w.msg; }).join('; '));
-  check('repair не трогает исправный код', E.repair(src).code === first.code);
-
   check('атрибуты не искажены', first.code.indexOf('(" ') === -1 && first.code.indexOf(' ")') === -1,
     'в значение атрибута вклинился пробел');
 
@@ -223,15 +207,23 @@ check('разметка не изменилась', skeleton(TYPO_SRC) === skele
 check('идемпотентность', E.typography(typo.code).code === typo.code);
 console.log('');
 
-console.log('битая верстка:');
-const found = E.checkTags(BROKEN);
-check('проблемы найдены (' + found.length + ')', found.length === 6,
-  found.map(function (w) { return w.msg; }).join('; '));
-const fixedRes = E.repair(BROKEN);
-check('починка выполнена (' + fixedRes.fixes.length + ')', fixedRes.fixes.length === 5,
-  fixedRes.fixes.map(function (f) { return f.msg; }).join('; '));
-check('после починки проблем не осталось', E.checkTags(fixedRes.code).length === 0);
-check('результат идемпотентен', E.beautify(fixedRes.code).code === fixedRes.code);
+console.log('директивы шаблонизатора:');
+const DIR = CASES['директивы шаблонизатора построчно'];
+const dirOut = E.beautify(DIR).code;
+const dirLines = dirOut.split('\n').filter(function (l) { return l.trim(); });
+
+check('каждая директива на своей строке',
+  dirLines.filter(function (l) { return (l.match(/@\{/g) || []).length > 1; }).length === 0,
+  dirLines.filter(function (l) { return (l.match(/@\{/g) || []).length > 1; }).join(' | '));
+check('текст с подстановками не порван',
+  dirOut.indexOf('Последние поступления ${brand1} и&nbsp;не&nbsp;только') !== -1);
+check('слитный блок не разорван внутри',
+  dirOut.indexOf('{% if x %}5{% else %}6{% endif %}') !== -1);
+check('подстановка осталась в тексте',
+  dirOut.indexOf('и ${inline} внутри текста') !== -1);
+check('пробел не добавлен перед слитной директивой',
+  dirOut.indexOf('<span>нет</span>@{end if}') !== -1);
+console.log('');
 
 console.log('\n' + (failed ? failed + ' проверок провалено' : 'все проверки пройдены'));
 process.exit(failed ? 1 : 0);
