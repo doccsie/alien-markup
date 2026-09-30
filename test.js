@@ -132,6 +132,16 @@ const CASES = {
 </td>
 <p>{% if x %}5{% else %}6{% endif %} и \${inline} внутри текста</p>`,
 
+  'длинные строчные теги в письме': `<tr>
+<td style="padding: 0 15px 0 15px;">
+<a href="https://max.ru/tsummoscow_bot" target="_blank" style=" text-decoration: none;">
+<img width="24" src="https://email-images.mindbox.ru/Tsum/1fd02086.png" alt="VK" style="border: 0; height: auto;  text-decoration: none; width: 24px;"/>
+</a>
+</td>
+<td style="padding: 0 15px 0 15px;"><a href="https://wa.me/74959337300" target="_blank" style=" text-decoration: none;"> <img width="24" src="https://email-images.mindbox.ru/ecd514eb/24.png" alt="Whatsapp" style="border: 0; height: auto;  text-decoration: none; width: 24px;" /> </a></td>
+<td style="padding: 0 15px 0 15px;"><a href="https://t.me/tsummoscow" target="_blank" style=" text-decoration: none;"><img width="24" src="https://email-images.mindbox.ru/ff957f80/36.png" alt="" style="border: 0; height: auto; width: 24px;" /></a></td>
+</tr>`,
+
   'строчное содержимое не рвётся': `<table>
 <tr>
 <td style="color: #6f757e;">ООО &laquo;Меркури Мода&raquo; 14<span>30</span>82, Мос<span>ковска</span>я обл., <span style="white-space: nowrap;">г. Оди<span>нцово</span>, д. Бар</span>виха, д.&nbsp;114 <span style="white-space: nowrap;">ОГРН 11<span>45</span>03<span>20</span>0</span></td>
@@ -223,6 +233,20 @@ check('подстановка осталась в тексте',
   dirOut.indexOf('и ${inline} внутри текста') !== -1);
 check('пробел не добавлен перед слитной директивой',
   dirOut.indexOf('<span>нет</span>@{end if}') !== -1);
+console.log('');
+
+console.log('переносы строчных тегов:');
+const SOC = E.beautify(CASES['длинные строчные теги в письме']).code;
+const socLines = SOC.split('\n');
+
+check('длинная ссылка с пробелами по краям развёрнута',
+  socLines.filter(function (l) { return /^\s*<a href="https:\/\/max\.ru/.test(l) && l.indexOf('<img') === -1; }).length === 1);
+check('картинка внутри неё на своей строке',
+  socLines.filter(function (l) { return /^\s*<img width="24" src="https:\/\/email-images[^"]*1fd02086/.test(l); }).length === 1);
+check('второй блок развёрнут так же',
+  socLines.filter(function (l) { return /^\s*<a href="https:\/\/wa\.me/.test(l) && l.indexOf('<img') === -1; }).length === 1);
+check('слитный блок без пробелов не разорван',
+  SOC.indexOf('none;"><img width="24" src="https://email-images.mindbox.ru/ff957f80/36.png"') !== -1);
 console.log('');
 
 console.log('\n' + (failed ? failed + ' проверок провалено' : 'все проверки пройдены'));

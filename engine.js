@@ -597,8 +597,11 @@
     var body = parts.length ? name + ' ' + parts.join(' ') : name;
     // foreign content (SVG/MathML) and custom elements must keep the slash;
     // у void-тегов слеш сохраняем ровно так, как его написал автор
-    if (tok.self && !tok.void) return '<' + body + ' />';
-    if (tok.void) return '<' + body + (tok.slash && !(opts && opts.dropSlash) ? ' />' : '>');
+    // при сжатии пробел перед «/>» не нужен, если значение последнего атрибута
+    // в кавычках: слеш к нему не прилипнет. Без кавычек пробел обязателен.
+    var sl = (opts.tightSlash && /["']$/.test(body)) ? '/>' : ' />';
+    if (tok.self && !tok.void) return '<' + body + sl;
+    if (tok.void) return '<' + body + (tok.slash && !(opts && opts.dropSlash) ? sl : '>');
     return '<' + body + '>';
   }
 
@@ -765,7 +768,30 @@
    * Перенос строки внутри строчного потокаHTML превращается в пробел,
    * поэтому «…Мос</span>ковска…» ломать нельзя ни при какой длине.
    */
-  function isInlineRenderable(node) {
+  /**
+   * У элемента есть пробелы по обеим внутренним границам: «<a> <img> </a>».
+   * Только такой элемент можно разложить по строкам — перенос строки в HTML
+   * равен пробелу, и «<a><img></a>» разорвать нельзя, появится лишний отступ.
+   */
+  function edgeBreakable(node) {
+    var ch = node.children;
+    if (!ch.length) return false;
+    if (node.closed === false) return false;
+    return startsWS(ch[0]) && endsWS(ch[ch.length - 1]);
+  }
+
+  /**
+   * Строчный элемент, который не влезает в строку и при этом разрывается
+   * по краям, выводится блоком: открывающий тег, содержимое с отступом,
+   * закрывающий тег — как это обычно и написано в исходнике письма.
+   */
+  function inlineOverflows(node, opts) {
+    if (!opts || !opts.inlineMax) return false;
+    if (!edgeBreakable(node)) return false;
+    return inlineRender([node], opts).length > opts.inlineMax;
+  }
+
+  function isInlineRenderable(node, opts) {
     if (node.type === 'text' || node.type === 'tplleaf') return true;
     // шаблонный блок с чисто строчным содержимым тоже не разрывается:
     // {% if %}5{% else %}6{% endif %} посреди текста должен остаться слитным
@@ -780,7 +806,7 @@
         if (ch.type === 'tplmid') continue;
         // вложенная управляющая конструкция разворачивает блок в строки
         if (isDirective(ch)) return false;
-        if (!isInlineRenderable(ch)) return false;
+        if (!isInlineRenderable(ch, opts)) return false;
       }
       return true;
     }
@@ -789,8 +815,10 @@
     if (RAW_TEXT.has(node.name) || PRE_TEXT.has(node.name)) return false;
     if (node.closed === false) return false;
     for (var i = 0; i < node.children.length; i++) {
-      if (!isInlineRenderable(node.children[i])) return false;
+      if (!isInlineRenderable(node.children[i], opts)) return false;
     }
+    // длинный <a> с пробелами по краям раскладывается по строкам
+    if (inlineOverflows(node, opts)) return false;
     return true;
   }
 
@@ -800,8 +828,9 @@
     for (var i = 0; i < node.children.length; i++) {
       var c = node.children[i];
       if (c.type === 'text' && !c.tok.v.trim()) continue;
-      if (!isInlineRenderable(c)) return false;
+      if (!isInlineRenderable(c, opts)) return false;
     }
+    if (inlineOverflows(node, opts)) return false;
     return runToLines(node.children, opts).length < 2;
   }
 
@@ -1098,7 +1127,7 @@
 
       for (var i = 0; i < kids.length; i++) {
         var c = kids[i];
-        if (isInlineRenderable(c)) { run.push(c); continue; }
+        if (isInlineRenderable(c, opts)) { run.push(c); continue; }
         flushRun();
         walk(c, d);
       }
@@ -1178,7 +1207,8 @@
       lowercase: level >= 3,
       unquote: level >= 3,
       dropAttrs: level >= 3,
-      dropSlash: level >= 3
+      dropSlash: level >= 3,
+      tightSlash: true
     };
 
     // build list of significant tokens for whitespace context
