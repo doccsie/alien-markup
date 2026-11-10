@@ -21,6 +21,12 @@
   --err:#ff5f56;
   --warn:#ffb648;
   --glow:6px; --scan:.22; --vig:.55; --gridsize:34px;
+  /* подложка утопленных поверхностей: нумерация, шапки панелей,
+     тулбар, диагностика. В светлых темах переопределяется, иначе
+     чёрная плашка садится поверх белого фона. */
+  --sunk:rgba(0,0,0,.28);
+  --sunk-deep:rgba(0,0,0,.4);
+  --primary-inset:inset 0 0 0 1px rgba(0,0,0,.4);
   --code:14px;
 }
 
@@ -70,6 +76,7 @@ html[data-theme="monolith"]{
   --bg:#eceae4; --bg-2:#f6f5f2; --panel:#f6f5f2;
   --ph:#16150f; --ph-dim:#a8a498; --ph-ghost:#dedbd2;
   --a2:#e8341c; --led:#e8341c; --grid:rgba(22,21,15,.05);
+  --sunk:rgba(0,0,0,.045); --sunk-deep:rgba(0,0,0,.06); --primary-inset:none;
   --glow:0px; --scan:.045; --vig:.08;
 }
 html[data-theme="monolith"] #app{animation:none}
@@ -81,6 +88,7 @@ html[data-theme="bone"]{
   --bg:#f7f6f2; --bg-2:#fffdf9; --panel:#fffdf9;
   --ph:#262420; --ph-dim:#b3ada0; --ph-ghost:#e9e6de;
   --a2:#b4593c; --led:#b4593c; --grid:rgba(38,36,32,.035);
+  --sunk:rgba(0,0,0,.045); --sunk-deep:rgba(0,0,0,.06); --primary-inset:none;
   --glow:0px; --scan:0; --vig:.05;
 }
 /* FOG — холодная студийная */
@@ -88,6 +96,7 @@ html[data-theme="fog"]{
   --bg:#f3f6f9; --bg-2:#ffffff; --panel:#ffffff;
   --ph:#1a2027; --ph-dim:#aab4c0; --ph-ghost:#e3e9f0;
   --a2:#3f5fd7; --led:#3f5fd7; --grid:rgba(26,32,39,.03);
+  --sunk:rgba(0,0,0,.045); --sunk-deep:rgba(0,0,0,.06); --primary-inset:none;
   --glow:0px; --scan:0; --vig:.04;
 }
 /* GRAPHITE — мягкая тёмная */
@@ -112,6 +121,7 @@ html[data-theme="slime"]{
   --a2:#7ec636; --led:#7ec636; --grid:rgba(20,20,20,.05);
   --edge:#141414; --glow:0px; --scan:0; --vig:.06;
   --err:#d62f86; --warn:#e8a020;
+  --sunk:rgba(20,20,20,.05); --sunk-deep:rgba(20,20,20,.07); --primary-inset:none;
 }
 /* STATIC — фуксия с лаймом и помехами */
 html[data-theme="static"]{
@@ -269,7 +279,7 @@ header{
 .toolbar{
   display:flex; gap:10px; align-items:center; flex-wrap:wrap;
   padding:11px 20px; border-bottom:1px solid var(--ph-dim);
-  background:rgba(0,0,0,.25);
+  background:var(--sunk);
 }
 button, .seg span, select{
   font-family:inherit; font-size:13px; letter-spacing:.16em; text-transform:uppercase;
@@ -279,7 +289,7 @@ button, .seg span, select{
 }
 button:hover, .seg span:hover{background:var(--ph-ghost); box-shadow:0 0 12px -2px var(--ph)}
 button:active{transform:translateY(1px)}
-button.primary{border-color:var(--ph); box-shadow:inset 0 0 0 1px rgba(0,0,0,.4), 0 0 14px -6px var(--ph)}
+button.primary{border-color:var(--ph); box-shadow:var(--primary-inset), 0 0 14px -6px var(--ph)}
 button.primary:hover{background:var(--ph); color:var(--bg); text-shadow:none}
 button:disabled{opacity:.35; cursor:not-allowed}
 
@@ -325,7 +335,7 @@ main{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:0}
 .pane-head{
   display:flex; align-items:center; gap:11px; padding:9px 14px;
   border-bottom:1px solid var(--ph-dim); font-size:12px; letter-spacing:.22em;
-  text-transform:uppercase; color:var(--ph-dim); background:rgba(0,0,0,.35);
+  text-transform:uppercase; color:var(--ph-dim); background:var(--sunk);
 }
 .pane-head .dot{width:6px;height:6px;background:var(--ph);box-shadow:0 0 6px var(--ph)}
 .pane-head .meta{margin-left:auto; font-size:12px; letter-spacing:.14em}
@@ -333,8 +343,29 @@ main{flex:1; display:grid; grid-template-columns:1fr 1fr; gap:0; min-height:0}
 .gutter{
   padding:10px 9px 10px 13px; text-align:right; color:var(--ph-dim);
   font-size:var(--code); line-height:1.45; user-select:none; overflow:hidden;
-  border-right:1px solid var(--ph-ghost); background:rgba(0,0,0,.25);
+  border-right:1px solid var(--ph-ghost); background:var(--sunk);
   min-width:52px; white-space:pre; text-shadow:none;
+}
+/* проблемная строка: номер горит, сама строка под полосой.
+   Цвет — по худшему, что на ней найдено: ошибка / внимание / заметка. */
+.gutter i{
+  font-style:normal; font-weight:400; --hl:var(--err);
+  color:var(--hl); text-shadow:0 0 9px var(--hl);
+}
+.gutter i.lv-warn{--hl:var(--warn)}
+.gutter i.lv-info{--hl:var(--ph-dim); text-shadow:none}
+.marks{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0}
+.marks div{
+  position:absolute; left:0; right:0; --hl:var(--err);
+  background:color-mix(in srgb, var(--hl) 15%, transparent);
+  border-left:2px solid var(--hl);
+  box-shadow:inset 0 0 22px -12px var(--hl);
+}
+.marks div.lv-warn{--hl:var(--warn)}
+.marks div.lv-info{--hl:var(--ph-dim); box-shadow:none}
+.marks div.hit{
+  background:color-mix(in srgb, var(--hl) 30%, transparent);
+  box-shadow:inset 0 0 22px -8px var(--hl);
 }
 textarea{
   position:relative; z-index:1;
@@ -346,7 +377,7 @@ textarea{
 textarea::placeholder{color:var(--ph-dim); opacity:.7}
 textarea::selection{background:var(--ph); color:var(--bg); text-shadow:none}
 textarea::-webkit-scrollbar{width:10px;height:10px}
-textarea::-webkit-scrollbar-track{background:rgba(0,0,0,.3)}
+textarea::-webkit-scrollbar-track{background:var(--sunk)}
 textarea::-webkit-scrollbar-thumb{background:var(--ph-ghost); border:1px solid var(--ph-dim)}
 textarea::-webkit-scrollbar-thumb:hover{background:var(--ph-dim)}
 
@@ -359,11 +390,18 @@ textarea::-webkit-scrollbar-thumb:hover{background:var(--ph-dim)}
 /* --- diagnostics --- */
 #diag{
   max-height:180px; overflow:auto; border-top:1px solid var(--ph-dim);
-  padding:10px 15px; font-size:13px; background:rgba(0,0,0,.4); display:none;
+  padding:10px 15px; font-size:13px; background:var(--sunk-deep); display:none;
 }
 #diag.show{display:block}
 #diag .row{display:flex; gap:8px; padding:2px 0}
 #diag .row .tag{min-width:66px; font-size:11px; letter-spacing:.16em; opacity:.9}
+#diag .row .ln{
+  min-width:62px; font-size:11px; letter-spacing:.1em; opacity:.75;
+  text-align:right; flex-shrink:0;
+}
+#diag .row[data-line]{cursor:pointer}
+#diag .row[data-line]:hover{background:var(--ph-ghost)}
+#diag .row[data-line]:hover .ln{opacity:1; text-decoration:underline}
 .lvl-err{color:var(--err)} .lvl-warn{color:var(--warn)} .lvl-info{color:var(--ph-dim)}
 .lvl-fix{color:var(--ph)}
 
@@ -473,6 +511,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
       </div>
       <div class="editor">
         <div class="gutter" id="gutIn">1</div>
+        <div class="marks" id="marksIn" aria-hidden="true"></div>
         <textarea id="input" spellcheck="false" autocomplete="off"
           placeholder="Вставьте HTML сюда, либо перетащите файл в окно…"></textarea>
       </div>
@@ -1060,6 +1099,33 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     }
 
     return { root: root, warnings: warnings };
+  }
+
+  /**
+   * Быстрый перевод смещения в номер строки (1-based).
+   * Стартовые позиции строк считаются один раз на документ,
+   * дальше — бинарный поиск: диагностика на большом письме
+   * не должна стоить прохода по тексту на каждое предупреждение.
+   */
+  function lineIndex(src) {
+    var starts = [0];
+    for (var i = 0; i < src.length; i++) if (src[i] === '\n') starts.push(i + 1);
+    return function (pos) {
+      if (pos == null) return 0;
+      var lo = 0, hi = starts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
+      }
+      return lo + 1;
+    };
+  }
+
+  /** Проставляет каждому предупреждению номер строки по его pos. */
+  function withLines(warnings, src) {
+    var lineAt = lineIndex(src);
+    warnings.forEach(function (w) { w.line = lineAt(w.pos); });
+    return warnings;
   }
 
   function short(s) {
@@ -1650,7 +1716,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     out = out.replace(new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'), function (_, n) {
       return protectedChunks[Number(n)];
     });
-    return { code: out, warnings: built.warnings };
+    return { code: out, warnings: withLines(built.warnings, src) };
   }
 
   function squishTpl(v) {
@@ -1817,24 +1883,25 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
           var a = attrs[i];
           if (a.tpl) continue;
           var ln = (a.name || '').toLowerCase();
-          if (seen[ln]) w.push({ level: 'warn', msg: 'Дубль атрибута ' + a.name + ' в <' + n.name + '>' });
+          if (seen[ln]) w.push({ level: 'warn', pos: n.tok.s, msg: 'Дубль атрибута ' + a.name + ' в <' + n.name + '>' });
           seen[ln] = 1;
           if (ln === 'id' && a.value) {
-            if (seenIds[a.value]) w.push({ level: 'warn', msg: 'Повтор id="' + a.value + '"' });
+            if (seenIds[a.value]) w.push({ level: 'warn', pos: n.tok.s, msg: 'Повтор id="' + a.value + '"' });
             seenIds[a.value] = 1;
           }
           if (a.value === '' && (ln === 'class' || ln === 'style' || ln === 'id')) {
-            w.push({ level: 'info', msg: 'Пустой атрибут ' + a.name + ' в <' + n.name + '>' });
+            w.push({ level: 'info', pos: n.tok.s, msg: 'Пустой атрибут ' + a.name + ' в <' + n.name + '>' });
           }
         }
         if (n.name === 'img' && !attrs.some(function (a) { return !a.tpl && (a.name || '').toLowerCase() === 'alt'; })) {
-          w.push({ level: 'info', msg: '<img> без alt' });
+          w.push({ level: 'info', pos: n.tok.s, msg: '<img> без alt' });
         }
       }
       (n.children || []).forEach(walk);
     })(built.root);
 
-    return w;
+    w.sort(function (a, b) { return (a.pos || 0) - (b.pos || 0); });
+    return withLines(w, src);
   }
 
   /* ---------------------------------------------------------- *
@@ -2111,25 +2178,90 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   paintStats();
 
   /* ---------------- gutters ---------------- */
+  // Строки с проблемами: номера для подсветки в нумерации и полос под текстом.
+  var badLines = [];
+  var hotLine = 0;
+
   function paintGutter(ta, gut) {
     var n = ta.value ? ta.value.split('\n').length : 1;
     if (n > 20000) n = 20000;
-    var key = String(n);
+    var marks = (gut === $('gutIn') && badLines.length) ? badLines : null;
+    var key = n + '|' + (marks ? marks.map(function (m) { return m.line + m.level; }).join(',') : '');
     if (gut.dataset.key !== key) {
+      var set = null;
+      if (marks) { set = {}; marks.forEach(function (m) { set[m.line] = m.level; }); }
       var out = [];
-      for (var i = 1; i <= n; i++) out.push(i);
+      for (var i = 1; i <= n; i++) {
+        out.push(set && set[i] ? '<i class="lv-' + set[i] + '">' + i + '</i>' : i);
+      }
       gut.innerHTML = out.join('\n');
       gut.dataset.key = key;
     }
     gut.scrollTop = ta.scrollTop;
   }
 
+  // Полосы под проблемными строками. Textarea прозрачна, полосы лежат под ней.
+  function paintMarks() {
+    var box = $('marksIn');
+    if (!badLines.length) { box.innerHTML = ''; return; }
+    var cs = getComputedStyle(input);
+    var lh = parseFloat(cs.lineHeight) || 20;
+    var top0 = (parseFloat(cs.paddingTop) || 0) - input.scrollTop;
+    box.style.left = $('gutIn').offsetWidth + 'px';
+    box.innerHTML = badLines.map(function (m) {
+      return '<div class="lv-' + m.level + (m.line === hotLine ? ' hit' : '') + '" style="top:' +
+             (top0 + (m.line - 1) * lh).toFixed(1) + 'px;height:' + lh.toFixed(1) + 'px"></div>';
+    }).join('');
+  }
+
+  var RANK = { err: 3, warn: 2, fix: 1, info: 0 };
+
+  function paintBad(warnings) {
+    var byLine = {};
+    hotLine = 0;
+    (warnings || []).forEach(function (w) {
+      if (!w.line) return;
+      var lv = w.level === 'fix' ? 'info' : w.level;
+      if (!byLine[w.line] || RANK[lv] > RANK[byLine[w.line]]) byLine[w.line] = lv;
+    });
+    badLines = Object.keys(byLine).map(function (l) {
+      return { line: Number(l), level: byLine[l] };
+    }).sort(function (a, b) { return a.line - b.line; });
+    paintGutter(input, $('gutIn'));
+    paintMarks();
+  }
+
+  // Прокручивает ввод к строке и ставит туда курсор.
+  function gotoLine(n) {
+    var lines = input.value.split('\n');
+    if (n < 1 || n > lines.length) return;
+    var pos = 0;
+    for (var i = 0; i < n - 1; i++) pos += lines[i].length + 1;
+    var cs = getComputedStyle(input);
+    var lh = parseFloat(cs.lineHeight) || 20;
+    input.focus();
+    input.setSelectionRange(pos, pos + lines[n - 1].length);
+    input.scrollTop = Math.max(0, (n - 1) * lh - input.clientHeight / 2 + lh);
+    $('gutIn').scrollTop = input.scrollTop;
+    hotLine = n;
+    paintMarks();
+  }
+
   function sync(ta, gut) {
-    ta.addEventListener('scroll', function () { gut.scrollTop = ta.scrollTop; });
+    ta.addEventListener('scroll', function () {
+      gut.scrollTop = ta.scrollTop;
+      if (ta === input) paintMarks();
+    });
     ta.addEventListener('input', function () { paintGutter(ta, gut); });
   }
   sync(input, $('gutIn'));
   sync(output, $('gutOut'));
+  window.addEventListener('resize', paintMarks);
+
+  // Правка ввода делает прошлую диагностику неактуальной — гасим подсветку.
+  input.addEventListener('input', function () {
+    if (badLines.length) paintBad([]);
+  });
 
   function meta(text) {
     var chars = text.length;
@@ -2151,18 +2283,32 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   /* ---------------- diagnostics ---------------- */
   function paintDiag(warnings) {
     var box = $('diag');
+    // по порядку документа: читать список сверху вниз удобнее,
+    // чем прыгать между предупреждениями парсера и анализатора
+    warnings = warnings.slice().sort(function (a, b) {
+      return (a.line || 0) - (b.line || 0);
+    });
     $('stDiag').textContent = warnings.length;
     $('ledErr').classList.toggle('off', !warnings.length);
     if (!warnings.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
     var TAGS = { err: 'ошибка', warn: 'внимание', fix: 'исправлено', info: 'заметка' };
     var html = warnings.slice(0, 60).map(function (w) {
       var tag = TAGS[w.level] || 'заметка';
-      return '<div class="row lvl-' + w.level + '"><span class="tag">[' + tag + ']</span><span>' +
+      var ln = w.line ? ' data-line="' + w.line + '" title="Перейти к строке ' + w.line + '"' : '';
+      return '<div class="row lvl-' + w.level + '"' + ln + '><span class="tag">[' + tag + ']</span>' +
+             '<span class="ln">' + (w.line ? 'стр. ' + w.line : '') + '</span><span>' +
              esc(w.msg) + '</span></div>';
     }).join('');
-    if (warnings.length > 60) html += '<div class="row lvl-info"><span class="tag"></span><span>… ещё ' + (warnings.length - 60) + '</span></div>';
+    if (warnings.length > 60) html += '<div class="row lvl-info"><span class="tag"></span><span class="ln"></span><span>… ещё ' + (warnings.length - 60) + '</span></div>';
     box.innerHTML = html; box.classList.add('show');
+    paintBad(warnings);
   }
+
+  // Клик по строке диагностики — прыжок к нужной строке в редакторе.
+  $('diag').addEventListener('click', function (e) {
+    var row = e.target.closest('[data-line]');
+    if (row) gotoLine(Number(row.dataset.line));
+  });
   function esc(s) {
     return String(s).replace(/[&<>]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
@@ -2241,7 +2387,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
   function dedupeWarn(list) {
     var seen = {}, out = [];
     list.forEach(function (w) {
-      var k = w.level + '|' + w.msg;
+      var k = w.level + '|' + w.msg + '|' + (w.line || 0);
       if (seen[k]) return; seen[k] = 1; out.push(w);
     });
     return out;
@@ -2280,7 +2426,7 @@ footer b{color:var(--ph); font-weight:400; display:inline-block; text-align:left
     input.value = ''; output.value = '';
     $('inMeta').textContent = meta(''); $('outMeta').textContent = '—';
     paintGutter(input, $('gutIn')); paintGutter(output, $('gutOut'));
-    paintDiag([]); $('stStatus').textContent = 'буфер очищен';
+    paintDiag([]); paintBad([]); $('stStatus').textContent = 'буфер очищен';
     $('stSave').textContent = '—'; $('stMode').textContent = '—';
     input.focus();
   };

@@ -553,6 +553,33 @@
     return { root: root, warnings: warnings };
   }
 
+  /**
+   * Быстрый перевод смещения в номер строки (1-based).
+   * Стартовые позиции строк считаются один раз на документ,
+   * дальше — бинарный поиск: диагностика на большом письме
+   * не должна стоить прохода по тексту на каждое предупреждение.
+   */
+  function lineIndex(src) {
+    var starts = [0];
+    for (var i = 0; i < src.length; i++) if (src[i] === '\n') starts.push(i + 1);
+    return function (pos) {
+      if (pos == null) return 0;
+      var lo = 0, hi = starts.length - 1;
+      while (lo < hi) {
+        var mid = (lo + hi + 1) >> 1;
+        if (starts[mid] <= pos) lo = mid; else hi = mid - 1;
+      }
+      return lo + 1;
+    };
+  }
+
+  /** Проставляет каждому предупреждению номер строки по его pos. */
+  function withLines(warnings, src) {
+    var lineAt = lineIndex(src);
+    warnings.forEach(function (w) { w.line = lineAt(w.pos); });
+    return warnings;
+  }
+
   function short(s) {
     s = String(s).replace(/\s+/g, ' ').trim();
     return s.length > 28 ? s.slice(0, 28) + '…' : s;
@@ -1141,7 +1168,7 @@
     out = out.replace(new RegExp(SENTINEL + '(\\d+)' + SENTINEL, 'g'), function (_, n) {
       return protectedChunks[Number(n)];
     });
-    return { code: out, warnings: built.warnings };
+    return { code: out, warnings: withLines(built.warnings, src) };
   }
 
   function squishTpl(v) {
@@ -1308,24 +1335,25 @@
           var a = attrs[i];
           if (a.tpl) continue;
           var ln = (a.name || '').toLowerCase();
-          if (seen[ln]) w.push({ level: 'warn', msg: 'Дубль атрибута ' + a.name + ' в <' + n.name + '>' });
+          if (seen[ln]) w.push({ level: 'warn', pos: n.tok.s, msg: 'Дубль атрибута ' + a.name + ' в <' + n.name + '>' });
           seen[ln] = 1;
           if (ln === 'id' && a.value) {
-            if (seenIds[a.value]) w.push({ level: 'warn', msg: 'Повтор id="' + a.value + '"' });
+            if (seenIds[a.value]) w.push({ level: 'warn', pos: n.tok.s, msg: 'Повтор id="' + a.value + '"' });
             seenIds[a.value] = 1;
           }
           if (a.value === '' && (ln === 'class' || ln === 'style' || ln === 'id')) {
-            w.push({ level: 'info', msg: 'Пустой атрибут ' + a.name + ' в <' + n.name + '>' });
+            w.push({ level: 'info', pos: n.tok.s, msg: 'Пустой атрибут ' + a.name + ' в <' + n.name + '>' });
           }
         }
         if (n.name === 'img' && !attrs.some(function (a) { return !a.tpl && (a.name || '').toLowerCase() === 'alt'; })) {
-          w.push({ level: 'info', msg: '<img> без alt' });
+          w.push({ level: 'info', pos: n.tok.s, msg: '<img> без alt' });
         }
       }
       (n.children || []).forEach(walk);
     })(built.root);
 
-    return w;
+    w.sort(function (a, b) { return (a.pos || 0) - (b.pos || 0); });
+    return withLines(w, src);
   }
 
   /* ---------------------------------------------------------- *
